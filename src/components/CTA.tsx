@@ -31,18 +31,6 @@ const CTA: React.FC = () => {
           </div>
         </div>
       </div>
-      
-      <div className="absolute bottom-10 left-0 right-0 text-center">
-        <a 
-          href="#benefits" 
-          className="inline-flex flex-col items-center text-sm text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <span>Learn More</span>
-          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="animate-float">
-            <path d="M12 5v14M5 12l7 7 7-7"/>
-          </svg>
-        </a>
-      </div>
     </div>
   );
 };
