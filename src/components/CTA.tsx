@@ -13,10 +13,10 @@ const CTA: React.FC = () => {
             24/7 Instant Support
           </span>
           <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold leading-tight mb-6">
-            Chat with Us Instantly on WhatsApp!
+            Secure and Reliable Free Private Messaging and Calling
           </h1>
           <p className="text-xl text-muted-foreground max-w-2xl mx-auto mb-10">
-            Get real-time assistance, personalized recommendations, and exclusive offers through WhatsApp - all at your fingertips.
+            Learn how whatsapp can help you
           </p>
         </div>
 
