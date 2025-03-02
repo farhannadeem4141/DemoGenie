@@ -3,19 +3,19 @@ import React from 'react';
 
 const steps = [
   {
-    number: "01",
-    title: "Click the Chat Button",
-    description: "Tap the WhatsApp button on our website to open the chat directly."
+    number: "1️⃣",
+    title: "Sign Up",
+    description: "Download WhatsApp Business & create your free account."
   },
   {
-    number: "02",
-    title: "Send Us a Message",
-    description: "Type your query or request – no need for introductions or waiting."
+    number: "2️⃣",
+    title: "Set Up Auto-Replies & Catalog",
+    description: "Customize responses & showcase your products."
   },
   {
-    number: "03",
-    title: "Get Instant Assistance",
-    description: "Receive immediate responses from our team or AI assistant."
+    number: "3️⃣",
+    title: "Start Selling & Engaging",
+    description: "Chat with customers, send promotions & boost revenue!"
   }
 ];
 
@@ -27,8 +27,8 @@ const StepGuide: React.FC = () => {
           <span className="bg-whatsapp/10 text-whatsapp px-4 py-1 rounded-full text-sm font-medium">
             How It Works
           </span>
-          <h2 className="section-heading mt-4">Simple Steps to Connect</h2>
-          <p className="section-subheading">Getting started is easy and takes less than a minute.</p>
+          <h2 className="section-heading mt-4 text-3xl font-bold">🚀 Getting Started is Easy!</h2>
+          <p className="section-subheading text-xl text-muted-foreground">Set up your WhatsApp Business account in minutes.</p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -53,12 +53,9 @@ const StepGuide: React.FC = () => {
             href="https://wa.me/1234567890" 
             target="_blank" 
             rel="noopener noreferrer"
-            className="btn-whatsapp inline-flex items-center gap-2"
+            className="btn-whatsapp inline-flex items-center gap-2 bg-whatsapp text-white px-6 py-3 rounded-full font-medium hover:bg-whatsapp/90 transition-colors shadow-md"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
-            </svg>
-            Start Chatting Now
+            ✅ Get Started Now →
           </a>
         </div>
       </div>

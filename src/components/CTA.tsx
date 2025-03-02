@@ -10,14 +10,19 @@ const CTA: React.FC = () => {
       <div className="max-w-4xl w-full">
         <div className="text-center opacity-0 animate-fade-up">
           <span className="inline-block bg-whatsapp/10 text-whatsapp px-4 py-1 rounded-full text-sm font-medium mb-4">
-            24/7 Instant Support
+            💬 WhatsApp Business
           </span>
           <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold leading-tight mb-6">
-            Secure and Reliable Free Private Messaging and Calling
+            Instantly Connect, Sell & Support with WhatsApp Business
           </h1>
           <p className="text-xl text-muted-foreground max-w-2xl mx-auto mb-10">
-            Learn how whatsapp can help you
+            📢 Turn conversations into conversions! Automate replies, send promotions, and grow your business—right from WhatsApp.
           </p>
+          
+          <a href={whatsappLink} target="_blank" rel="noopener noreferrer" 
+             className="btn-whatsapp inline-flex items-center gap-2 bg-whatsapp text-white px-6 py-3 rounded-full font-medium hover:bg-whatsapp/90 transition-colors shadow-md">
+            ✅ Talk with us →
+          </a>
         </div>
 
         <div className="mt-8 flex justify-center opacity-0 animate-scale-in">

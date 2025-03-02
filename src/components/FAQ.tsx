@@ -4,24 +4,24 @@ import { cn } from '@/lib/utils';
 
 const faqs = [
   {
-    question: "How fast do you respond on WhatsApp?",
-    answer: "We typically respond within minutes during business hours (9 AM - 6 PM). Outside these hours, our AI assistant can handle many queries immediately, and our team will follow up on complex issues the next business day."
+    question: "Is WhatsApp Business free?",
+    answer: "Yes! You can start for free with essential tools. Advanced API features are available for businesses scaling up."
   },
   {
-    question: "What services do you offer through WhatsApp?",
-    answer: "We offer customer support, product inquiries, order tracking, appointment scheduling, and personalized recommendations. You can also receive exclusive offers and promotions through our WhatsApp channel."
+    question: "Will I receive spam messages?",
+    answer: "No. Customers opt-in to receive your messages, ensuring high engagement without spam."
   },
   {
-    question: "Is my information secure when chatting on WhatsApp?",
-    answer: "Yes, all conversations are end-to-end encrypted by WhatsApp. We also adhere to strict data protection policies and never share your information with third parties without your consent."
+    question: "Can I use WhatsApp Business with my personal number?",
+    answer: "Yes! You can either use a separate number or switch your existing WhatsApp to a Business account."
   },
   {
-    question: "Can I speak with a real person or is it just a bot?",
-    answer: "Our service combines AI assistance with human support. Many queries can be handled instantly by our AI, but you can always request to speak with a human team member at any point in the conversation."
+    question: "How many customers can I message at once?",
+    answer: "WhatsApp Business allows you to send broadcasts to multiple customers at once, though there are limits to prevent spam. The WhatsApp Business API offers expanded broadcasting capabilities for larger businesses."
   },
   {
-    question: "Do I need to install WhatsApp to use this service?",
-    answer: "Yes, you'll need to have WhatsApp installed on your device. It's free to download from your device's app store if you don't already have it."
+    question: "Can I track results from my WhatsApp marketing?",
+    answer: "Yes, WhatsApp Business provides analytics on message delivery, read receipts, and customer interactions to help you measure your campaign effectiveness."
   }
 ];
 
@@ -39,8 +39,8 @@ const FAQ: React.FC = () => {
           <span className="bg-whatsapp/10 text-whatsapp px-4 py-1 rounded-full text-sm font-medium">
             Questions & Answers
           </span>
-          <h2 className="section-heading mt-4">Frequently Asked Questions</h2>
-          <p className="section-subheading">Find answers to the most common questions about our WhatsApp service.</p>
+          <h2 className="section-heading mt-4 text-3xl font-bold">Frequently Asked Questions</h2>
+          <p className="section-subheading text-xl text-muted-foreground">Find answers to common questions about WhatsApp Business.</p>
         </div>
 
         <div className="space-y-4">
@@ -57,7 +57,7 @@ const FAQ: React.FC = () => {
                 className="flex justify-between items-center w-full p-4 text-left bg-white hover:bg-gray-50 transition-colors"
                 onClick={() => toggleFAQ(index)}
               >
-                <span className="font-medium">{faq.question}</span>
+                <span className="font-medium">💬 {faq.question}</span>
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
                   className={cn(

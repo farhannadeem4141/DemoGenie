@@ -4,46 +4,40 @@ import { cn } from '@/lib/utils';
 
 const benefits = [
   {
-    title: "24/7 Instant Support",
-    description: "Get immediate assistance any time of the day or night through WhatsApp.",
+    title: "98% open rate vs. email's 20%",
+    description: "Your messages get seen, guaranteeing higher engagement for every campaign you run.",
     icon: (
       <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-whatsapp">
-        <circle cx="12" cy="12" r="10"></circle>
-        <polyline points="12 6 12 12 16 14"></polyline>
+        <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+        <polyline points="22,6 12,13 2,6"></polyline>
       </svg>
     )
   },
   {
-    title: "Personalized Recommendations",
-    description: "Receive tailored suggestions based on your preferences and needs.",
+    title: "Instant responses with auto-replies",
+    description: "Keep customers engaged 24/7 with automated responses and quick replies.",
     icon: (
       <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-whatsapp">
-        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-        <circle cx="9" cy="7" r="4"></circle>
-        <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-        <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+        <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path>
       </svg>
     )
   },
   {
-    title: "Exclusive WhatsApp Offers",
-    description: "Access special discounts and promotions available only to our WhatsApp community.",
+    title: "Seamless sales with in-chat payments",
+    description: "Complete the entire sales process right in WhatsApp, from product showcase to payment.",
     icon: (
       <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-whatsapp">
-        <polyline points="20 12 20 22 4 22 4 12"></polyline>
-        <rect x="2" y="7" width="20" height="5"></rect>
-        <line x1="12" y1="22" x2="12" y2="7"></line>
-        <path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"></path>
-        <path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"></path>
+        <rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect>
+        <line x1="1" y1="10" x2="23" y2="10"></line>
       </svg>
     )
   },
   {
-    title: "Seamless Communication",
-    description: "Enjoy smooth, reliable, and secure conversations directly through WhatsApp.",
+    title: "Boost engagement & increase sales",
+    description: "Make customer support effortless and turn conversations into conversions.",
     icon: (
       <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-whatsapp">
-        <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
       </svg>
     )
   }
@@ -55,10 +49,10 @@ const Benefits: React.FC = () => {
       <div className="container mx-auto">
         <div className="text-center mb-16 opacity-0 animate-fade-up">
           <span className="bg-whatsapp/10 text-whatsapp px-4 py-1 rounded-full text-sm font-medium">
-            Why Choose WhatsApp
+            Why WhatsApp Business?
           </span>
-          <h2 className="section-heading mt-4">Experience the Benefits</h2>
-          <p className="section-subheading">Discover how our WhatsApp service can transform your experience.</p>
+          <h2 className="section-heading mt-4 text-3xl font-bold">📲 Your Customers Are Already on WhatsApp—Meet Them There!</h2>
+          <p className="section-subheading text-xl text-muted-foreground">Discover how our WhatsApp Business service can transform your customer engagement.</p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
@@ -73,10 +67,19 @@ const Benefits: React.FC = () => {
               <div className="feature-icon-wrapper">
                 {benefit.icon}
               </div>
-              <h3 className="feature-title">{benefit.title}</h3>
-              <p className="feature-description">{benefit.description}</p>
+              <h3 className="feature-title font-semibold text-lg mt-4 mb-2">{benefit.title}</h3>
+              <p className="feature-description text-muted-foreground">{benefit.description}</p>
             </div>
           ))}
+        </div>
+        
+        <div className="mt-12 text-center">
+          <a 
+            href="#" 
+            className="btn-whatsapp inline-flex items-center gap-2 bg-whatsapp text-white px-6 py-3 rounded-full font-medium hover:bg-whatsapp/90 transition-colors shadow-md"
+          >
+            ✅ Get Started Now →
+          </a>
         </div>
       </div>
     </section>

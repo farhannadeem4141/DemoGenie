@@ -13,7 +13,7 @@ const Header: React.FC = () => {
               <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
             </svg>
           </div>
-          <h1 className="text-xl font-bold">WhatsApp</h1>
+          <h1 className="text-xl font-bold">WhatsApp Business</h1>
         </div>
         <nav>
           <ul className="flex space-x-8">
