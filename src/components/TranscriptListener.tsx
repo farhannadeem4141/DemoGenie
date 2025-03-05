@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useConversationHistory } from '@/hooks/useConversationHistory';
 import VideoPlayer from './VideoPlayer';
 import { cn } from '@/lib/utils';
@@ -13,7 +13,6 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({ className }) =>
   const { addMessage, currentVideo } = useConversationHistory();
   const [isVideoVisible, setIsVideoVisible] = useState(false);
   const { toast } = useToast();
-  const hasTriggeredInitialTest = useRef(false);
 
   // Make video visible after a short delay to create a nice animation
   useEffect(() => {
@@ -70,23 +69,6 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({ className }) =>
     window.addEventListener('voice_input', captureVoiceInput);
     
     console.log("TranscriptListener: Set up event listeners for vapi_message and voice_input");
-
-    // Manually trigger a test for "account setup" - ONLY ONCE
-    if (!hasTriggeredInitialTest.current) {
-      hasTriggeredInitialTest.current = true;
-      // Use a longer delay to ensure component is fully mounted
-      const timer = setTimeout(() => {
-        console.log("Manually triggering search for 'account setup' - ONE TIME ONLY");
-        window.dispatchEvent(new CustomEvent('voice_input', {
-          detail: {
-            type: 'voice_input',
-            text: "account setup" 
-          }
-        }));
-      }, 2000);
-      
-      return () => clearTimeout(timer);
-    }
 
     return () => {
       window.removeEventListener('vapi_message', captureAiMessages);
