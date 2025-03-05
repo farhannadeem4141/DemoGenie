@@ -7,14 +7,14 @@ export async function searchVideosByKeyword(keyword: string): Promise<any[]> {
   console.log("Searching videos with keyword:", keyword);
   
   try {
-    // Normalize the keyword - remove extra spaces and convert to lowercase
-    const normalizedKeyword = keyword.toLowerCase().trim();
+    // Normalize the keyword - trim extra spaces but preserve case for matching
+    const trimmedKeyword = keyword.trim();
     
-    // First try an exact match on any of the three tags
+    // Try exact matches first (case-insensitive)
     const { data: exactMatches, error: exactMatchError } = await supabase
       .from('Videos')
       .select('*')
-      .or(`video_tag1.ilike.${normalizedKeyword},video_tag2.ilike.${normalizedKeyword},video_tag3.ilike.${normalizedKeyword}`);
+      .or(`video_tag1.ilike.${trimmedKeyword},video_tag2.ilike.${trimmedKeyword},video_tag3.ilike.${trimmedKeyword}`);
     
     if (exactMatchError) {
       console.error('Error searching videos (exact match):', exactMatchError);
@@ -23,11 +23,11 @@ export async function searchVideosByKeyword(keyword: string): Promise<any[]> {
       return exactMatches;
     }
     
-    // If no exact matches, try partial matches
+    // If no exact matches, try partial matches (case-insensitive)
     const { data: partialMatches, error: partialMatchError } = await supabase
       .from('Videos')
       .select('*')
-      .or(`video_tag1.ilike.%${normalizedKeyword}%,video_tag2.ilike.%${normalizedKeyword}%,video_tag3.ilike.%${normalizedKeyword}%`);
+      .or(`video_tag1.ilike.%${trimmedKeyword}%,video_tag2.ilike.%${trimmedKeyword}%,video_tag3.ilike.%${trimmedKeyword}%`);
     
     if (partialMatchError) {
       console.error('Error searching videos (partial match):', partialMatchError);
@@ -37,7 +37,7 @@ export async function searchVideosByKeyword(keyword: string): Promise<any[]> {
     }
     
     // If no matches found, log and return empty array
-    console.log("No matches found for keyword:", normalizedKeyword);
+    console.log("No matches found for keyword:", trimmedKeyword);
     return [];
   } catch (error) {
     console.error("Error in searchVideosByKeyword:", error);

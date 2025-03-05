@@ -21,7 +21,6 @@ export function useConversationHistory() {
   const [currentVideo, setCurrentVideo] = useState<VideoMatch | null>(null);
   const { toast } = useToast();
   
-  // Load conversation history from localStorage on mount
   useEffect(() => {
     const savedHistory = localStorage.getItem('conversation_history');
     if (savedHistory) {
@@ -33,25 +32,21 @@ export function useConversationHistory() {
     }
   }, []);
   
-  // Save conversation history to localStorage whenever it changes
   useEffect(() => {
     if (messages.length > 0) {
       localStorage.setItem('conversation_history', JSON.stringify(messages));
     }
   }, [messages]);
 
-  // Fetch the initial video on component mount
   useEffect(() => {
     const fetchInitialVideo = async () => {
       try {
-        // First try to get the video with ID 42
         let { data, error } = await supabase
           .from('Videos')
           .select('*')
           .eq('id', 42)
           .maybeSingle();
         
-        // If that fails or returns no data, get the first video available
         if (error || !data) {
           console.log("Could not find video with ID 42, fetching first available video");
           const { data: firstVideo, error: firstVideoError } = await supabase
@@ -63,7 +58,6 @@ export function useConversationHistory() {
           if (firstVideoError || !firstVideo) {
             console.error('Error fetching any video:', firstVideoError);
             
-            // If we still can't get a video, use a fallback URL
             setCurrentVideo({
               id: 0,
               video_url: 'https://aalbdeydgpallvcmmsvq.supabase.co/storage/v1/object/sign/DemoGenie/What%20is%20WhatsApp.mp4?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1cmwiOiJEZW1vR2VuaWUvV2hhdCBpcyBXaGF0c0FwcC5tcDQiLCJpYXQiOjE3NDExMDI1OTEsImV4cCI6MTc3MjYzODU5MX0.285hWWaFnlZJ8wLkuYaAyf_sLH0wjDzxv4kgXsGEzO4',
@@ -71,7 +65,6 @@ export function useConversationHistory() {
               keyword: 'WhatsApp'
             });
             
-            // Show toast for fallback video
             toast({
               title: "Using fallback video",
               description: "Could not fetch video data from database",
@@ -85,7 +78,6 @@ export function useConversationHistory() {
         }
         
         if (data && data.video_url) {
-          // Format the video data to match the VideoMatch interface
           const videoData: VideoMatch = {
             id: data.id,
             video_url: data.video_url,
@@ -102,7 +94,6 @@ export function useConversationHistory() {
             duration: 3000,
           });
         } else {
-          // Fallback in case we got data but no video_url
           setCurrentVideo({
             id: 0,
             video_url: 'https://aalbdeydgpallvcmmsvq.supabase.co/storage/v1/object/sign/DemoGenie/What%20is%20WhatsApp.mp4?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1cmwiOiJEZW1vR2VuaWUvV2hhdCBpcyBXaGF0c0FwcC5tcDQiLCJpYXQiOjE3NDExMDI1OTEsImV4cCI6MTc3MjYzODU5MX0.285hWWaFnlZJ8wLkuYaAyf_sLH0wjDzxv4kgXsGEzO4',
@@ -118,7 +109,6 @@ export function useConversationHistory() {
         }
       } catch (error) {
         console.error('Error fetching initial video:', error);
-        // Provide a fallback video in case of any errors
         setCurrentVideo({
           id: 0,
           video_url: 'https://aalbdeydgpallvcmmsvq.supabase.co/storage/v1/object/sign/DemoGenie/What%20is%20WhatsApp.mp4?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1cmwiOiJEZW1vR2VuaWUvV2hhdCBpcyBXaGF0c0FwcC5tcDQiLCJpYXQiOjE3NDExMDI1OTEsImV4cCI6MTc3MjYzODU5MX0.285hWWaFnlZJ8wLkuYaAyf_sLH0wjDzxv4kgXsGEzO4',
@@ -138,46 +128,38 @@ export function useConversationHistory() {
     fetchInitialVideo();
   }, [toast]);
   
-  // Function to extract potential keywords from a message
   const extractKeywords = (text: string): string[] => {
-    // Convert to lowercase and clean the text
-    const cleanText = text.toLowerCase().replace(/[^\w\s]/g, '');
+    const cleanText = text.replace(/[^\w\s]/g, '');
     
-    // Directly check for important specific phrases first
     const phrases = [
-      "quick replies", 
-      "quick reply",
-      "message templates", 
-      "whatsapp business",
-      "business profile",
-      "templates"
+      "Quick Replies", 
+      "Quick Reply",
+      "Message Templates", 
+      "WhatsApp Business",
+      "Business Profile",
+      "Templates"
     ];
     
-    // Check if any of our important phrases are in the text
     const foundPhrases = phrases.filter(phrase => 
       text.toLowerCase().includes(phrase.toLowerCase())
     );
     
-    // If we found important phrases, prioritize them
     if (foundPhrases.length > 0) {
       console.log("Found important phrases:", foundPhrases);
       return foundPhrases;
     }
     
-    // Otherwise, split by spaces and filter out short words
     const words = cleanText.split(/\s+/).filter(word => word.length > 3);
     
     console.log("Extracted keywords:", words);
-    return [...new Set(words)]; // Remove duplicates
+    return [...new Set(words)];
   };
   
-  // Function to add a new message and search for keywords
   const addMessage = async (text: string) => {
     console.log("Processing new message:", text);
     const newMessage = { text, timestamp: Date.now() };
     setMessages(prev => [...prev, newMessage]);
     
-    // Extract keywords and search for videos
     const keywords = extractKeywords(text);
     
     if (keywords.length === 0) {
@@ -190,11 +172,9 @@ export function useConversationHistory() {
       return;
     }
     
-    // Search for each keyword
     console.log("Searching for videos with keywords:", keywords);
     
-    // First try high-priority keywords (phrases we specifically care about)
-    const highPriorityKeywords = ["quick replies", "quick reply", "message templates", "templates", "whatsapp business"];
+    const highPriorityKeywords = ["Quick Replies", "Quick Reply", "Message Templates", "Templates", "WhatsApp Business"];
     const priorityKeyword = keywords.find(kw => highPriorityKeywords.includes(kw.toLowerCase()));
     
     if (priorityKeyword) {
@@ -216,7 +196,6 @@ export function useConversationHistory() {
       }
     }
     
-    // If no high priority keywords or no results, try all keywords
     let foundAnyVideos = false;
     
     for (const keyword of keywords) {
@@ -234,7 +213,7 @@ export function useConversationHistory() {
           description: `Now playing: ${matchedVideos[0].video_name || keyword}`,
           duration: 3000,
         });
-        break; // Exit after finding first match
+        break;
       }
     }
     
