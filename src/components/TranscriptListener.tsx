@@ -71,7 +71,7 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({ className }) =>
     
     console.log("TranscriptListener: Set up event listeners for vapi_message and voice_input");
 
-    // Manually trigger a test for "whatsapp payment" - ONLY ONCE
+    // Manually trigger a test for "whatsapp payments" - ONLY ONCE
     if (!hasTriggeredInitialTest.current) {
       hasTriggeredInitialTest.current = true;
       // Use a longer delay to ensure component is fully mounted
