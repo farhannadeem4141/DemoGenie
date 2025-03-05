@@ -1,5 +1,5 @@
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useConversationHistory } from '@/hooks/useConversationHistory';
 import VideoPlayer from './VideoPlayer';
 import { cn } from '@/lib/utils';
@@ -10,6 +10,18 @@ interface TranscriptListenerProps {
 
 const TranscriptListener: React.FC<TranscriptListenerProps> = ({ className }) => {
   const { addMessage, currentVideo } = useConversationHistory();
+  const [isVideoVisible, setIsVideoVisible] = useState(false);
+
+  // Make video visible after a short delay to create a nice animation
+  useEffect(() => {
+    if (currentVideo) {
+      // Small delay for animation purposes
+      const timer = setTimeout(() => {
+        setIsVideoVisible(true);
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [currentVideo]);
 
   // Listen for messages from the AI assistant via window event
   useEffect(() => {
@@ -31,7 +43,10 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({ className }) =>
   return (
     <div className={cn("fixed right-4 bottom-24 w-80 transition-all", className)}>
       {currentVideo && currentVideo.video_url && (
-        <div className="animate-fade-up mb-4">
+        <div className={cn(
+          "mb-4 transform transition-all duration-300 ease-in-out",
+          isVideoVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
+        )}>
           <VideoPlayer 
             videoUrl={currentVideo.video_url} 
             videoName={currentVideo.video_name || `Video related to "${currentVideo.keyword}"`}

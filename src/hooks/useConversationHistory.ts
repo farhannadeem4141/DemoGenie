@@ -1,6 +1,7 @@
 
 import { useState, useEffect } from 'react';
 import { searchVideosByKeyword } from '@/services/videoService';
+import { supabase } from '@/integrations/supabase/client';
 
 interface Message {
   text: string;
@@ -37,6 +38,40 @@ export function useConversationHistory() {
       localStorage.setItem('conversation_history', JSON.stringify(messages));
     }
   }, [messages]);
+
+  // Fetch the initial video (ID: 42) on component mount
+  useEffect(() => {
+    const fetchInitialVideo = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('Videos')
+          .select('*')
+          .eq('id', 42)
+          .single();
+        
+        if (error) {
+          console.error('Error fetching initial video:', error);
+          return;
+        }
+        
+        if (data && data.video_url) {
+          // Format the video data to match the VideoMatch interface
+          const videoData: VideoMatch = {
+            id: data.id,
+            video_url: data.video_url,
+            video_name: data.video_name || 'What is WhatsApp',
+            keyword: data.video_tag1 || 'WhatsApp'
+          };
+          
+          setCurrentVideo(videoData);
+        }
+      } catch (error) {
+        console.error('Error fetching initial video:', error);
+      }
+    };
+    
+    fetchInitialVideo();
+  }, []);
   
   // Function to add a new message and search for keywords
   const addMessage = async (text: string) => {

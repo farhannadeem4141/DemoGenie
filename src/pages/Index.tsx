@@ -84,6 +84,17 @@ const Index = () => {
           onMessage: handleMessage
         };
 
+        // Dispatch an initial message event to trigger the video display
+        // This happens immediately when the assistant is loaded
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('vapi_message', {
+            detail: {
+              type: 'ai_message',
+              text: 'Welcome to WhatsApp AI Assistant'
+            }
+          }));
+        }, 1000);
+
         // Initialize Vapi with the config (without callbacks property)
         vapiInstance = window.vapiSDK.run({
           apiKey: apiKey,
