@@ -71,13 +71,15 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({ className }) =>
     console.log("TranscriptListener: Set up event listeners for vapi_message and voice_input");
 
     // Manually trigger a test for "quick replies" for debugging
-    console.log("Manually triggering search for 'quick replies'");
-    window.dispatchEvent(new CustomEvent('voice_input', {
-      detail: {
-        type: 'voice_input',
-        text: "I want to know about quick replies"
-      }
-    }));
+    setTimeout(() => {
+      console.log("Manually triggering search for 'quick replies'");
+      window.dispatchEvent(new CustomEvent('voice_input', {
+        detail: {
+          type: 'voice_input',
+          text: "quick replies"
+        }
+      }));
+    }, 2000);
 
     return () => {
       window.removeEventListener('vapi_message', captureAiMessages);
