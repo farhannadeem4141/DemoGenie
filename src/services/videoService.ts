@@ -55,17 +55,21 @@ export async function searchVideosByKeyword(keyword: string): Promise<any[]> {
   
   console.log("Found partial matches:", partialMatches);
   
-  // If still no matches, try with a fallback video for important keywords
+  // If still no matches, use a fallback video for important keywords
   if (!partialMatches || partialMatches.length === 0) {
     // Check if keyword is an important WhatsApp feature and provide a fallback video
     const fallbackKeywords = ['quick replies', 'quick reply', 'replies', 'whatsapp business', 'templates'];
     
     if (fallbackKeywords.some(k => keyword.toLowerCase().includes(k))) {
       console.log("No matches found but keyword is important. Using fallback video.");
+      
+      // Try to get a stable video URL from your Supabase bucket that won't expire quickly
+      const fallbackVideoUrl = 'https://aalbdeydgpallvcmmsvq.supabase.co/storage/v1/object/sign/DemoGenie/What%20is%20WhatsApp.mp4?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1cmwiOiJEZW1vR2VuaWUvV2hhdCBpcyBXaGF0c0FwcC5tcDQiLCJpYXQiOjE3NDExMDI1OTEsImV4cCI6MTc3MjYzODU5MX0.285hWWaFnlZJ8wLkuYaAyf_sLH0wjDzxv4kgXsGEzO4';
+      
       // Return a hardcoded fallback video for these important keywords
       return [{
         id: 999,
-        video_url: 'https://aalbdeydgpallvcmmsvq.supabase.co/storage/v1/object/sign/DemoGenie/What%20is%20WhatsApp.mp4?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1cmwiOiJEZW1vR2VuaWUvV2hhdCBpcyBXaGF0c0FwcC5tcDQiLCJpYXQiOjE3NDExMDI1OTEsImV4cCI6MTc3MjYzODU5MX0.285hWWaFnlZJ8wLkuYaAyf_sLH0wjDzxv4kgXsGEzO4',
+        video_url: fallbackVideoUrl,
         video_name: `WhatsApp ${keyword} Feature`,
         video_tag1: keyword
       }];

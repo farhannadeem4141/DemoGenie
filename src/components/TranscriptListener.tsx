@@ -13,6 +13,7 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({ className }) =>
   const { addMessage, currentVideo } = useConversationHistory();
   const [isVideoVisible, setIsVideoVisible] = useState(false);
   const { toast } = useToast();
+  const [triggerCount, setTriggerCount] = useState(0);
 
   // Make video visible after a short delay to create a nice animation
   useEffect(() => {
@@ -71,21 +72,25 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({ className }) =>
     console.log("TranscriptListener: Set up event listeners for vapi_message and voice_input");
 
     // Manually trigger a test for "quick replies" for debugging
-    setTimeout(() => {
-      console.log("Manually triggering search for 'quick replies'");
-      window.dispatchEvent(new CustomEvent('voice_input', {
-        detail: {
-          type: 'voice_input',
-          text: "quick replies"
-        }
-      }));
-    }, 2000);
+    // Only do this once to prevent multiple repeated triggers
+    if (triggerCount === 0) {
+      setTriggerCount(prev => prev + 1);
+      setTimeout(() => {
+        console.log("Manually triggering search for 'quick replies'");
+        window.dispatchEvent(new CustomEvent('voice_input', {
+          detail: {
+            type: 'voice_input',
+            text: "quick replies"
+          }
+        }));
+      }, 2000);
+    }
 
     return () => {
       window.removeEventListener('vapi_message', captureAiMessages);
       window.removeEventListener('voice_input', captureVoiceInput);
     };
-  }, [addMessage, toast]);
+  }, [addMessage, toast, triggerCount]);
 
   // Handle video error
   const handleVideoError = () => {
@@ -105,6 +110,7 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({ className }) =>
           isVideoVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
         )}>
           <VideoPlayer 
+            key={`video-${currentVideo.id}-${Date.now()}`} // Add a unique key to force re-render on video change
             videoUrl={currentVideo.video_url} 
             videoName={currentVideo.video_name || `Video related to "${currentVideo.keyword}"`}
             onEnded={() => console.log("Video playback ended")}
