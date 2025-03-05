@@ -17,9 +17,19 @@ interface VapiSDK {
   }) => any;
 }
 
+// Extended interface to include proper types for Vapi
+interface ExtendedVapiSDK extends VapiSDK {
+  run: (config: {
+    apiKey: string;
+    assistant: string;
+    config: any;
+    // Add any other properties that might be needed
+  }) => any;
+}
+
 declare global {
   interface Window {
-    vapiSDK?: VapiSDK;
+    vapiSDK?: ExtendedVapiSDK;
   }
 }
 
@@ -55,22 +65,36 @@ const Index = () => {
 
     script.onload = function () {
       if (window.vapiSDK) {
+        // Create a function to handle AI messages
+        const handleMessage = (message: any) => {
+          // Dispatch event with AI message for TranscriptListener to capture
+          window.dispatchEvent(new CustomEvent('vapi_message', {
+            detail: {
+              type: 'ai_message',
+              text: message.text || message.content
+            }
+          }));
+        };
+
+        // Instead of using callbacks directly, customize the config object
+        // to include any message handling logic
+        const customConfig = {
+          ...buttonConfig,
+          // Add any event handlers or custom properties that Vapi might support
+          onMessage: handleMessage
+        };
+
+        // Initialize Vapi with the config (without callbacks property)
         vapiInstance = window.vapiSDK.run({
           apiKey: apiKey,
           assistant: assistant,
-          config: buttonConfig,
-          callbacks: {
-            onMessage: (message: any) => {
-              // Dispatch event with AI message for TranscriptListener to capture
-              window.dispatchEvent(new CustomEvent('vapi_message', {
-                detail: {
-                  type: 'ai_message',
-                  text: message.text || message.content
-                }
-              }));
-            }
-          }
+          config: customConfig
         });
+
+        // Setup event listener for Vapi messages if the SDK supports it
+        if (vapiInstance && typeof vapiInstance.addEventListener === 'function') {
+          vapiInstance.addEventListener('message', handleMessage);
+        }
       }
     };
 
