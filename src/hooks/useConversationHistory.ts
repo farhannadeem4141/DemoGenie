@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { searchVideosByKeyword } from '@/services/videoService';
+import { searchVideosByKeyword, VideoSearchResult } from '@/services/videoService';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
@@ -15,10 +15,18 @@ interface VideoMatch {
   keyword: string;
 }
 
+interface SearchErrorLog {
+  timestamp: number;
+  message: string;
+  keyword: string;
+  details: string;
+}
+
 export function useConversationHistory() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [matchedVideos, setMatchedVideos] = useState<VideoMatch[]>([]);
   const [currentVideo, setCurrentVideo] = useState<VideoMatch | null>(null);
+  const [errorLogs, setErrorLogs] = useState<SearchErrorLog[]>([]);
   const { toast } = useToast();
   
   useEffect(() => {
@@ -58,6 +66,12 @@ export function useConversationHistory() {
           if (firstVideoError || !firstVideo) {
             console.error('Error fetching any video:', firstVideoError);
             
+            addErrorLog(
+              "Failed to fetch initial video", 
+              "initial_load", 
+              "Database error or no videos available"
+            );
+            
             setCurrentVideo({
               id: 0,
               video_url: 'https://aalbdeydgpallvcmmsvq.supabase.co/storage/v1/object/sign/DemoGenie/What%20is%20WhatsApp.mp4?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1cmwiOiJEZW1vR2VuaWUvV2hhdCBpcyBXaGF0c0FwcC5tcDQiLCJpYXQiOjE3NDExMDI1OTEsImV4cCI6MTc3MjYzODU5MX0.285hWWaFnlZJ8wLkuYaAyf_sLH0wjDzxv4kgXsGEzO4',
@@ -94,6 +108,12 @@ export function useConversationHistory() {
             duration: 3000,
           });
         } else {
+          addErrorLog(
+            "Missing video URL in initial video", 
+            "initial_load", 
+            "Video record exists but URL is missing"
+          );
+          
           setCurrentVideo({
             id: 0,
             video_url: 'https://aalbdeydgpallvcmmsvq.supabase.co/storage/v1/object/sign/DemoGenie/What%20is%20WhatsApp.mp4?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1cmwiOiJEZW1vR2VuaWUvV2hhdCBpcyBXaGF0c0FwcC5tcDQiLCJpYXQiOjE3NDExMDI1OTEsImV4cCI6MTc3MjYzODU5MX0.285hWWaFnlZJ8wLkuYaAyf_sLH0wjDzxv4kgXsGEzO4',
@@ -109,6 +129,13 @@ export function useConversationHistory() {
         }
       } catch (error) {
         console.error('Error fetching initial video:', error);
+        
+        addErrorLog(
+          "Exception during initial video fetch", 
+          "initial_load", 
+          JSON.stringify(error)
+        );
+        
         setCurrentVideo({
           id: 0,
           video_url: 'https://aalbdeydgpallvcmmsvq.supabase.co/storage/v1/object/sign/DemoGenie/What%20is%20WhatsApp.mp4?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1cmwiOiJEZW1vR2VuaWUvV2hhdCBpcyBXaGF0c0FwcC5tcDQiLCJpYXQiOjE3NDExMDI1OTEsImV4cCI6MTc3MjYzODU5MX0.285hWWaFnlZJ8wLkuYaAyf_sLH0wjDzxv4kgXsGEzO4',
@@ -155,6 +182,23 @@ export function useConversationHistory() {
     return [...new Set(words)];
   };
   
+  const addErrorLog = (message: string, keyword: string, details: string) => {
+    const newError: SearchErrorLog = {
+      timestamp: Date.now(),
+      message,
+      keyword,
+      details
+    };
+    
+    setErrorLogs(prev => [newError, ...prev].slice(0, 50));
+    
+    try {
+      localStorage.setItem('video_search_errors', JSON.stringify([newError, ...errorLogs].slice(0, 50)));
+    } catch (e) {
+      console.error('Failed to save error log to localStorage:', e);
+    }
+  };
+  
   const addMessage = async (text: string) => {
     console.log("Processing new message:", text);
     const newMessage = { text, timestamp: Date.now() };
@@ -164,6 +208,12 @@ export function useConversationHistory() {
     
     if (keywords.length === 0) {
       console.log("No keywords found in message");
+      addErrorLog(
+        "No keywords extracted", 
+        text.substring(0, 30), 
+        "Message doesn't contain any extractable keywords"
+      );
+      
       toast({
         title: "No keywords found",
         description: "Couldn't extract any keywords from the message",
@@ -175,14 +225,18 @@ export function useConversationHistory() {
     console.log("Searching for videos with keywords:", keywords);
     
     const highPriorityKeywords = ["Quick Replies", "Quick Reply", "Message Templates", "Templates", "WhatsApp Business"];
-    const priorityKeyword = keywords.find(kw => highPriorityKeywords.includes(kw.toLowerCase()));
+    const priorityKeyword = keywords.find(kw => 
+      highPriorityKeywords.some(priority => 
+        priority.toLowerCase() === kw.toLowerCase()
+      )
+    );
     
     if (priorityKeyword) {
       console.log("Found high priority keyword:", priorityKeyword);
-      const videos = await searchVideosByKeyword(priorityKeyword);
+      const searchResult = await searchVideosByKeyword(priorityKeyword);
       
-      if (videos && videos.length > 0) {
-        const matchedVideos = videos.map(video => ({ ...video, keyword: priorityKeyword }));
+      if (searchResult.success && searchResult.data && searchResult.data.length > 0) {
+        const matchedVideos = searchResult.data.map(video => ({ ...video, keyword: priorityKeyword }));
         setMatchedVideos(matchedVideos);
         console.log("Setting current video to high priority match:", matchedVideos[0]);
         setCurrentVideo(matchedVideos[0]);
@@ -193,17 +247,24 @@ export function useConversationHistory() {
           duration: 3000,
         });
         return;
+      } else {
+        addErrorLog(
+          `No video found for priority keyword: ${priorityKeyword}`, 
+          priorityKeyword, 
+          searchResult.errorReason || "Unknown reason"
+        );
       }
     }
     
     let foundAnyVideos = false;
+    let searchErrors: {keyword: string, reason: string}[] = [];
     
     for (const keyword of keywords) {
-      const videos = await searchVideosByKeyword(keyword);
+      const searchResult = await searchVideosByKeyword(keyword);
       
-      if (videos && videos.length > 0) {
+      if (searchResult.success && searchResult.data && searchResult.data.length > 0) {
         foundAnyVideos = true;
-        const matchedVideos = videos.map(video => ({ ...video, keyword }));
+        const matchedVideos = searchResult.data.map(video => ({ ...video, keyword }));
         setMatchedVideos(matchedVideos);
         console.log("Setting current video to:", matchedVideos[0]);
         setCurrentVideo(matchedVideos[0]);
@@ -214,16 +275,34 @@ export function useConversationHistory() {
           duration: 3000,
         });
         break;
+      } else {
+        searchErrors.push({
+          keyword,
+          reason: searchResult.errorReason || "Unknown reason"
+        });
       }
     }
     
     if (!foundAnyVideos) {
       console.log("No matching videos found for keywords:", keywords);
+      
+      searchErrors.forEach(err => {
+        addErrorLog(
+          `No video found for keyword: ${err.keyword}`, 
+          err.keyword, 
+          err.reason
+        );
+      });
+      
+      const errorDetails = searchErrors.length > 2 
+        ? `${searchErrors.length} keywords tried without matches` 
+        : searchErrors.map(e => `"${e.keyword}": ${e.reason}`).join(", ");
+      
       toast({
         variant: "destructive",
         title: "No videos found",
-        description: "No matching videos for your query",
-        duration: 3000,
+        description: `No matching videos for your query. ${errorDetails}`,
+        duration: 5000,
       });
     }
   };
@@ -233,12 +312,30 @@ export function useConversationHistory() {
     localStorage.removeItem('conversation_history');
   };
   
+  const clearErrorLogs = () => {
+    setErrorLogs([]);
+    localStorage.removeItem('video_search_errors');
+  };
+  
+  useEffect(() => {
+    const savedErrorLogs = localStorage.getItem('video_search_errors');
+    if (savedErrorLogs) {
+      try {
+        setErrorLogs(JSON.parse(savedErrorLogs));
+      } catch (e) {
+        console.error('Failed to parse error logs from localStorage:', e);
+      }
+    }
+  }, []);
+  
   return {
     messages,
     addMessage,
     clearHistory,
     matchedVideos,
     currentVideo,
-    setCurrentVideo
+    setCurrentVideo,
+    errorLogs,
+    clearErrorLogs
   };
 }
