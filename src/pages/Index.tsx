@@ -7,6 +7,7 @@ import SocialProof from '@/components/SocialProof';
 import StepGuide from '@/components/StepGuide';
 import FAQ from '@/components/FAQ';
 import Footer from '@/components/Footer';
+import TranscriptListener from '@/components/TranscriptListener';
 
 interface VapiSDK {
   run: (config: {
@@ -58,6 +59,17 @@ const Index = () => {
           apiKey: apiKey,
           assistant: assistant,
           config: buttonConfig,
+          callbacks: {
+            onMessage: (message: any) => {
+              // Dispatch event with AI message for TranscriptListener to capture
+              window.dispatchEvent(new CustomEvent('vapi_message', {
+                detail: {
+                  type: 'ai_message',
+                  text: message.text || message.content
+                }
+              }));
+            }
+          }
         });
       }
     };
@@ -80,6 +92,7 @@ const Index = () => {
         <SocialProof />
         <StepGuide />
         <FAQ />
+        <TranscriptListener />
       </main>
       <Footer />
     </div>
