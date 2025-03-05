@@ -6,6 +6,7 @@ interface VideoPlayerProps {
   videoUrl: string;
   videoName?: string;
   onEnded?: () => void;
+  onError?: () => void;
   className?: string;
 }
 
@@ -13,6 +14,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   videoUrl, 
   videoName, 
   onEnded,
+  onError,
   className
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -21,6 +23,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   useEffect(() => {
     // Reset error state when URL changes
     setErrorLoading(false);
+    console.log("VideoPlayer: Loading video URL:", videoUrl);
     
     // Reset and play when video URL changes
     if (videoRef.current) {
@@ -28,14 +31,16 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       videoRef.current.play().catch(err => {
         console.error("Error playing video:", err);
         setErrorLoading(true);
+        if (onError) onError();
       });
     }
-  }, [videoUrl]);
+  }, [videoUrl, onError]);
 
   // Handle video errors
   const handleVideoError = () => {
     console.error("Video failed to load:", videoUrl);
     setErrorLoading(true);
+    if (onError) onError();
   };
 
   return (

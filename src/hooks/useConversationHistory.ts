@@ -39,7 +39,7 @@ export function useConversationHistory() {
     }
   }, [messages]);
 
-  // Fetch the initial video on component mount - we'll use a more flexible approach here
+  // Fetch the initial video on component mount
   useEffect(() => {
     const fetchInitialVideo = async () => {
       try {
@@ -48,10 +48,11 @@ export function useConversationHistory() {
           .from('Videos')
           .select('*')
           .eq('id', 42)
-          .maybeSingle(); // Using maybeSingle instead of single to avoid errors if no record found
+          .maybeSingle();
         
         // If that fails or returns no data, get the first video available
         if (error || !data) {
+          console.log("Could not find video with ID 42, fetching first available video");
           const { data: firstVideo, error: firstVideoError } = await supabase
             .from('Videos')
             .select('*')
@@ -83,6 +84,7 @@ export function useConversationHistory() {
             keyword: data.video_tag1 || 'WhatsApp'
           };
           
+          console.log("Setting initial video:", videoData);
           setCurrentVideo(videoData);
         } else {
           // Fallback in case we got data but no video_url
@@ -108,17 +110,45 @@ export function useConversationHistory() {
     fetchInitialVideo();
   }, []);
   
+  // Function to extract potential keywords from a message
+  const extractKeywords = (text: string): string[] => {
+    // Remove punctuation and convert to lowercase
+    const cleanText = text.toLowerCase().replace(/[^\w\s]/g, '');
+    
+    // Split by spaces and filter out short words
+    const words = cleanText.split(/\s+/).filter(word => word.length > 3);
+    
+    // Important phrases to check for (add more as needed)
+    const phrases = [
+      "quick replies", 
+      "message templates", 
+      "whatsapp business",
+      "business profile"
+    ];
+    
+    const foundPhrases = phrases.filter(phrase => 
+      text.toLowerCase().includes(phrase.toLowerCase())
+    );
+    
+    // Combine individual words and found phrases
+    const keywords = [...new Set([...words, ...foundPhrases])];
+    console.log("Extracted keywords:", keywords);
+    
+    return keywords;
+  };
+  
   // Function to add a new message and search for keywords
   const addMessage = async (text: string) => {
+    console.log("Processing new message:", text);
     const newMessage = { text, timestamp: Date.now() };
     setMessages(prev => [...prev, newMessage]);
     
     // Extract keywords and search for videos
-    const words = text.toLowerCase().split(/\s+/);
-    const uniqueWords = [...new Set(words)].filter(word => word.length > 3); // Filter out short words
+    const keywords = extractKeywords(text);
     
     // Search for each keyword
-    const videoPromises = uniqueWords.map(async keyword => {
+    console.log("Searching for videos with keywords:", keywords);
+    const videoPromises = keywords.map(async keyword => {
       const videos = await searchVideosByKeyword(keyword);
       return videos.map(video => ({ ...video, keyword }));
     });
@@ -126,9 +156,13 @@ export function useConversationHistory() {
     const results = await Promise.all(videoPromises);
     const allMatches = results.flat();
     
+    console.log("Found video matches:", allMatches);
     if (allMatches.length > 0) {
       setMatchedVideos(allMatches);
+      console.log("Setting current video to:", allMatches[0]);
       setCurrentVideo(allMatches[0]);
+    } else {
+      console.log("No matching videos found for keywords:", keywords);
     }
   };
   

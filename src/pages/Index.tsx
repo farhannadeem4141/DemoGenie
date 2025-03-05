@@ -8,6 +8,7 @@ import StepGuide from '@/components/StepGuide';
 import FAQ from '@/components/FAQ';
 import Footer from '@/components/Footer';
 import TranscriptListener from '@/components/TranscriptListener';
+import { useToast } from '@/hooks/use-toast';
 
 interface VapiSDK {
   run: (config: {
@@ -34,7 +35,11 @@ declare global {
 }
 
 const Index = () => {
+  const { toast } = useToast();
+
   useEffect(() => {
+    console.log("Index component mounted");
+    
     // Initialize Vapi AI Assistant
     var vapiInstance = null;
     const assistant = "607959b0-89a1-482a-ad03-66a7c86327e1"; // Assistant ID
@@ -70,36 +75,58 @@ const Index = () => {
         // Create a function to handle AI messages
         const handleMessage = (message: any) => {
           console.log("Message from Vapi:", message);
+          
+          // Only proceed if we have text content
+          const messageText = message.text || message.content;
+          if (!messageText) {
+            console.warn("Received empty message from Vapi");
+            return;
+          }
+          
+          console.log("Dispatching vapi_message event with text:", messageText);
+          
           // Dispatch event with AI message for TranscriptListener to capture
           window.dispatchEvent(new CustomEvent('vapi_message', {
             detail: {
               type: 'ai_message',
-              text: message.text || message.content
+              text: messageText
             }
           }));
+          
+          // Also show toast for visibility
+          toast({
+            title: "AI Assistant",
+            description: messageText.substring(0, 100) + (messageText.length > 100 ? "..." : ""),
+            duration: 5000,
+          });
         };
 
-        // Instead of using callbacks directly, customize the config object
-        // to include any message handling logic
+        // Initialize Vapi with the config 
         const customConfig = {
           ...buttonConfig,
-          // Add any event handlers or custom properties that Vapi might support
           onMessage: handleMessage
         };
 
-        // Dispatch an initial message event to trigger the video display
-        // This happens immediately when the assistant is loaded
+        // Dispatch an initial welcome message event to trigger the video display
         setTimeout(() => {
           console.log("Dispatching initial welcome message");
+          const welcomeMessage = "Welcome to WhatsApp AI Assistant. Ask me about quick replies, message templates, or other WhatsApp Business features.";
+          
           window.dispatchEvent(new CustomEvent('vapi_message', {
             detail: {
               type: 'ai_message',
-              text: 'Welcome to WhatsApp AI Assistant'
+              text: welcomeMessage
             }
           }));
-        }, 1000);
+          
+          toast({
+            title: "AI Assistant Ready",
+            description: "Click the AI Assistant button to start a conversation",
+            duration: 5000,
+          });
+        }, 1500);
 
-        // Initialize Vapi with the config (without callbacks property)
+        // Initialize Vapi with the config
         vapiInstance = window.vapiSDK.run({
           apiKey: apiKey,
           assistant: assistant,
@@ -112,6 +139,17 @@ const Index = () => {
         if (vapiInstance && typeof vapiInstance.addEventListener === 'function') {
           vapiInstance.addEventListener('message', handleMessage);
         }
+        
+        // Manually trigger a search for "quick replies" for testing purposes
+        setTimeout(() => {
+          console.log("Triggering test search for 'quick replies'");
+          window.dispatchEvent(new CustomEvent('vapi_message', {
+            detail: {
+              type: 'ai_message',
+              text: "Here's information about quick replies in WhatsApp Business."
+            }
+          }));
+        }, 3000);
       }
     };
 
@@ -122,7 +160,7 @@ const Index = () => {
       }
       document.body.removeChild(script);
     };
-  }, []);
+  }, [toast]);
 
   return (
     <div className="min-h-screen overflow-hidden">
