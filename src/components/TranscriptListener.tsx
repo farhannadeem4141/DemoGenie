@@ -11,7 +11,7 @@ interface TranscriptListenerProps {
 }
 
 const TranscriptListener: React.FC<TranscriptListenerProps> = ({ className }) => {
-  const { addMessage, currentVideo, errorLogs, clearErrorLogs } = useConversationHistory();
+  const { addMessage, currentVideo, setCurrentVideo, errorLogs, clearErrorLogs } = useConversationHistory();
   const [isVideoVisible, setIsVideoVisible] = useState(false);
   const [showErrorLog, setShowErrorLog] = useState(false);
   const { toast } = useToast();
@@ -85,6 +85,21 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({ className }) =>
       title: "Video Error",
       description: "Failed to load the video. Please try again later.",
       duration: 5000,
+    });
+  };
+
+  // Handle video close
+  const handleVideoClose = () => {
+    setIsVideoVisible(false);
+    // Give time for the animation to finish before removing the video
+    setTimeout(() => {
+      setCurrentVideo(null);
+    }, 300);
+    
+    toast({
+      title: "Video Closed",
+      description: "You can ask me more questions anytime.",
+      duration: 3000,
     });
   };
 
@@ -163,6 +178,7 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({ className }) =>
             videoName={currentVideo.video_name || `Video related to "${currentVideo.keyword}"`}
             onEnded={() => console.log("Video playback ended")}
             onError={handleVideoError}
+            onClose={handleVideoClose}
           />
         </div>
       )}
