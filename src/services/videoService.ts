@@ -15,10 +15,11 @@ export async function searchVideosByKeyword(keyword: string): Promise<any[]> {
       "quick replies": 6,
       "quick reply": 6,
       "whatsapp payment": 1,
-      "whatsapp payments": 1, // Add plural version
+      "whatsapp payments": 1,
       "payment": 1,
-      "payments": 1, // Add plural version
-      "whatsapp business": 42
+      "payments": 1,
+      "whatsapp business": 42,
+      "account setup": 10
     };
     
     // First check if the keyword is in our known ids map
@@ -53,6 +54,7 @@ export async function searchVideosByKeyword(keyword: string): Promise<any[]> {
       console.log("Found payment-related keyword, using payment video");
     }
     
+    // Handle case for known video IDs
     if (knownId) {
       const videoId = knownVideoIds[knownId as keyof typeof knownVideoIds];
       console.log(`Found keyword match "${knownId}", fetching video with ID ${videoId}`);
@@ -82,18 +84,54 @@ export async function searchVideosByKeyword(keyword: string): Promise<any[]> {
       }
     }
     
-    // Try exact match on any of the three tags
+    // Search in all three tag columns with exact and partial matching
     try {
+      // First try an exact match on any of the three tags
       const { data: exactMatches, error: exactMatchError } = await supabase
         .from('Videos')
         .select('*')
-        .or(`video_tag1.ilike.%${normalizedKeyword}%,video_tag2.ilike.%${normalizedKeyword}%,video_tag3.ilike.%${normalizedKeyword}%`);
+        .or(`video_tag1.ilike.${normalizedKeyword},video_tag2.ilike.${normalizedKeyword},video_tag3.ilike.${normalizedKeyword}`);
       
       if (exactMatchError) {
         console.error('Error searching videos (exact match):', exactMatchError);
       } else if (exactMatches && exactMatches.length > 0) {
-        console.log("Found matches in video tags:", exactMatches);
+        console.log("Found exact matches in video tags:", exactMatches);
         return exactMatches;
+      }
+      
+      // If no exact matches, try partial matches
+      const { data: partialMatches, error: partialMatchError } = await supabase
+        .from('Videos')
+        .select('*')
+        .or(`video_tag1.ilike.%${normalizedKeyword}%,video_tag2.ilike.%${normalizedKeyword}%,video_tag3.ilike.%${normalizedKeyword}%`);
+      
+      if (partialMatchError) {
+        console.error('Error searching videos (partial match):', partialMatchError);
+      } else if (partialMatches && partialMatches.length > 0) {
+        console.log("Found partial matches in video tags:", partialMatches);
+        return partialMatches;
+      }
+      
+      // Special case for account setup
+      if (normalizedKeyword.includes("account") || normalizedKeyword.includes("setup")) {
+        const { data: accountSetupVideo, error: accountSetupError } = await supabase
+          .from('Videos')
+          .select('*')
+          .eq('id', 10)
+          .maybeSingle();
+          
+        if (!accountSetupError && accountSetupVideo) {
+          console.log("Found account setup video by ID:", accountSetupVideo);
+          return [accountSetupVideo];
+        } else {
+          // Fallback for account setup
+          return [{
+            id: 10,
+            video_url: 'https://aalbdeydgpallvcmmsvq.supabase.co/storage/v1/object/sign/DemoGenie/Creating%20Account%20Using%20New%20Number.mp4?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1cmwiOiJEZW1vR2VuaWUvQ3JlYXRpbmcgQWNjb3VudCBVc2luZyBOZXcgTnVtYmVyLm1wNCIsImlhdCI6MTc0MTEwMDIyNSwiZXhwIjoxNzcyNjM2MjI1fQ.tfcWJLu-JiByLZ9C3UXtJTbgWcWyQL-fUytTYWTnc7c',
+            video_name: 'Creating Account Using New Number',
+            video_tag1: 'account setup'
+          }];
+        }
       }
     } catch (err) {
       console.error("Error during tag match search:", err);
@@ -103,11 +141,22 @@ export async function searchVideosByKeyword(keyword: string): Promise<any[]> {
     const fallbackKeywords = [
       'quick replies', 'quick reply', 'replies', 
       'whatsapp business', 'templates', 
-      'whatsapp payment', 'payment', 'payments'
+      'whatsapp payment', 'payment', 'payments',
+      'account setup', 'account', 'setup'
     ];
     
     if (fallbackKeywords.some(k => normalizedKeyword.includes(k.toLowerCase()))) {
       console.log("No matches found but keyword is important. Using fallback video.");
+      
+      // Special case for account setup
+      if (normalizedKeyword.includes('account') || normalizedKeyword.includes('setup')) {
+        return [{
+          id: 10,
+          video_url: 'https://aalbdeydgpallvcmmsvq.supabase.co/storage/v1/object/sign/DemoGenie/Creating%20Account%20Using%20New%20Number.mp4?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1cmwiOiJEZW1vR2VuaWUvQ3JlYXRpbmcgQWNjb3VudCBVc2luZyBOZXcgTnVtYmVyLm1wNCIsImlhdCI6MTc0MTEwMDIyNSwiZXhwIjoxNzcyNjM2MjI1fQ.tfcWJLu-JiByLZ9C3UXtJTbgWcWyQL-fUytTYWTnc7c',
+          video_name: 'Creating Account Using New Number',
+          video_tag1: 'account setup'
+        }];
+      }
       
       // If the keyword contains "payment", use the payment fallback video
       if (normalizedKeyword.includes('payment') || normalizedKeyword.includes('payments')) {
