@@ -32,11 +32,17 @@ export async function searchVideosByKeyword(keyword: string): Promise<VideoSearc
     // Normalize the keyword - only trim extra spaces but preserve case
     const trimmedKeyword = keyword.trim();
     
+    // Debug - log the exact query we're going to run
+    console.log(`DEBUG: Searching for exact matches with keyword "${trimmedKeyword}"`);
+    console.log(`DEBUG: SQL filter condition: video_tag1.ilike.${trimmedKeyword},video_tag2.ilike.${trimmedKeyword},video_tag3.ilike.${trimmedKeyword}`);
+
     // Try exact matches first (case-insensitive)
     const { data: exactMatches, error: exactMatchError } = await supabase
       .from('Videos')
       .select('*')
       .or(`video_tag1.ilike.${trimmedKeyword},video_tag2.ilike.${trimmedKeyword},video_tag3.ilike.${trimmedKeyword}`);
+    
+    console.log("DEBUG: Exact match query response:", exactMatches);
     
     if (exactMatchError) {
       console.error('Error searching videos (exact match):', exactMatchError);
@@ -65,11 +71,17 @@ export async function searchVideosByKeyword(keyword: string): Promise<VideoSearc
       };
     }
     
+    // Debug - log the exact query for partial matches
+    console.log(`DEBUG: Searching for partial matches with keyword "${trimmedKeyword}"`);
+    console.log(`DEBUG: SQL filter condition: video_tag1.ilike.%${trimmedKeyword}%,video_tag2.ilike.%${trimmedKeyword}%,video_tag3.ilike.%${trimmedKeyword}%`);
+    
     // If no exact matches, try partial matches (case-insensitive)
     const { data: partialMatches, error: partialMatchError } = await supabase
       .from('Videos')
       .select('*')
       .or(`video_tag1.ilike.%${trimmedKeyword}%,video_tag2.ilike.%${trimmedKeyword}%,video_tag3.ilike.%${trimmedKeyword}%`);
+    
+    console.log("DEBUG: Partial match query response:", partialMatches);
     
     if (partialMatchError) {
       console.error('Error searching videos (partial match):', partialMatchError);

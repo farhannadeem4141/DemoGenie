@@ -157,6 +157,8 @@ export function useConversationHistory() {
   
   const extractKeywords = (text: string): string[] => {
     const cleanText = text.replace(/[^\w\s]/g, '');
+    console.log("DEBUG: Original text for keyword extraction:", text);
+    console.log("DEBUG: Cleaned text for keyword extraction:", cleanText);
     
     const phrases = [
       "Quick Replies", 
@@ -164,7 +166,8 @@ export function useConversationHistory() {
       "Message Templates", 
       "WhatsApp Business",
       "Business Profile",
-      "Templates"
+      "Templates",
+      "Catalog"
     ];
     
     const foundPhrases = phrases.filter(phrase => 
@@ -172,13 +175,13 @@ export function useConversationHistory() {
     );
     
     if (foundPhrases.length > 0) {
-      console.log("Found important phrases:", foundPhrases);
+      console.log("DEBUG: Found important phrases:", foundPhrases);
       return foundPhrases;
     }
     
     const words = cleanText.split(/\s+/).filter(word => word.length > 3);
+    console.log("DEBUG: Extracted individual words:", words);
     
-    console.log("Extracted keywords:", words);
     return [...new Set(words)];
   };
   
