@@ -71,15 +71,15 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({ className }) =>
     
     console.log("TranscriptListener: Set up event listeners for vapi_message and voice_input");
 
-    // Manually trigger a test for "quick replies" for debugging - ONLY ONCE
+    // Manually trigger a test for "whatsapp payment" - ONLY ONCE
     if (!hasTriggeredInitialTest.current) {
       hasTriggeredInitialTest.current = true;
       const timer = setTimeout(() => {
-        console.log("Manually triggering search for 'quick replies' - ONE TIME ONLY");
+        console.log("Manually triggering search for 'whatsapp payment' - ONE TIME ONLY");
         window.dispatchEvent(new CustomEvent('voice_input', {
           detail: {
             type: 'voice_input',
-            text: "quick replies"
+            text: "whatsapp payment"
           }
         }));
       }, 2000);
