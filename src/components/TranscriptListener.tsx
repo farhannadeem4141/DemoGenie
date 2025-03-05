@@ -20,6 +20,8 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({ className }) =>
         setIsVideoVisible(true);
       }, 300);
       return () => clearTimeout(timer);
+    } else {
+      setIsVideoVisible(false);
     }
   }, [currentVideo]);
 
@@ -28,6 +30,7 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({ className }) =>
     // This function will capture the AI messages
     const captureAiMessages = (event: any) => {
       if (event.detail && event.detail.type === 'ai_message' && event.detail.text) {
+        console.log("Received AI message:", event.detail.text);
         addMessage(event.detail.text);
       }
     };
@@ -39,6 +42,8 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({ className }) =>
       window.removeEventListener('vapi_message', captureAiMessages);
     };
   }, [addMessage]);
+
+  console.log("Current video:", currentVideo);
 
   return (
     <div className={cn("fixed right-4 bottom-24 w-80 transition-all", className)}>

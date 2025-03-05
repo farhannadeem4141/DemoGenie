@@ -39,19 +39,39 @@ export function useConversationHistory() {
     }
   }, [messages]);
 
-  // Fetch the initial video (ID: 42) on component mount
+  // Fetch the initial video on component mount - we'll use a more flexible approach here
   useEffect(() => {
     const fetchInitialVideo = async () => {
       try {
-        const { data, error } = await supabase
+        // First try to get the video with ID 42
+        let { data, error } = await supabase
           .from('Videos')
           .select('*')
           .eq('id', 42)
-          .single();
+          .maybeSingle(); // Using maybeSingle instead of single to avoid errors if no record found
         
-        if (error) {
-          console.error('Error fetching initial video:', error);
-          return;
+        // If that fails or returns no data, get the first video available
+        if (error || !data) {
+          const { data: firstVideo, error: firstVideoError } = await supabase
+            .from('Videos')
+            .select('*')
+            .limit(1)
+            .maybeSingle();
+          
+          if (firstVideoError || !firstVideo) {
+            console.error('Error fetching any video:', firstVideoError);
+            
+            // If we still can't get a video, use a fallback URL
+            setCurrentVideo({
+              id: 0,
+              video_url: 'https://aalbdeydgpallvcmmsvq.supabase.co/storage/v1/object/sign/DemoGenie/What%20is%20WhatsApp.mp4?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1cmwiOiJEZW1vR2VuaWUvV2hhdCBpcyBXaGF0c0FwcC5tcDQiLCJpYXQiOjE3NDExMDI1OTEsImV4cCI6MTc3MjYzODU5MX0.285hWWaFnlZJ8wLkuYaAyf_sLH0wjDzxv4kgXsGEzO4',
+              video_name: 'What is WhatsApp',
+              keyword: 'WhatsApp'
+            });
+            return;
+          }
+          
+          data = firstVideo;
         }
         
         if (data && data.video_url) {
@@ -59,14 +79,29 @@ export function useConversationHistory() {
           const videoData: VideoMatch = {
             id: data.id,
             video_url: data.video_url,
-            video_name: data.video_name || 'What is WhatsApp',
+            video_name: data.video_name || 'WhatsApp Video',
             keyword: data.video_tag1 || 'WhatsApp'
           };
           
           setCurrentVideo(videoData);
+        } else {
+          // Fallback in case we got data but no video_url
+          setCurrentVideo({
+            id: 0,
+            video_url: 'https://aalbdeydgpallvcmmsvq.supabase.co/storage/v1/object/sign/DemoGenie/What%20is%20WhatsApp.mp4?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1cmwiOiJEZW1vR2VuaWUvV2hhdCBpcyBXaGF0c0FwcC5tcDQiLCJpYXQiOjE3NDExMDI1OTEsImV4cCI6MTc3MjYzODU5MX0.285hWWaFnlZJ8wLkuYaAyf_sLH0wjDzxv4kgXsGEzO4',
+            video_name: 'What is WhatsApp',
+            keyword: 'WhatsApp'
+          });
         }
       } catch (error) {
         console.error('Error fetching initial video:', error);
+        // Provide a fallback video in case of any errors
+        setCurrentVideo({
+          id: 0,
+          video_url: 'https://aalbdeydgpallvcmmsvq.supabase.co/storage/v1/object/sign/DemoGenie/What%20is%20WhatsApp.mp4?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1cmwiOiJEZW1vR2VuaWUvV2hhdCBpcyBXaGF0c0FwcC5tcDQiLCJpYXQiOjE3NDExMDI1OTEsImV4cCI6MTc3MjYzODU5MX0.285hWWaFnlZJ8wLkuYaAyf_sLH0wjDzxv4kgXsGEzO4',
+          video_name: 'What is WhatsApp',
+          keyword: 'WhatsApp'
+        });
       }
     };
     

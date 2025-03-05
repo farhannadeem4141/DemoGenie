@@ -65,8 +65,11 @@ const Index = () => {
 
     script.onload = function () {
       if (window.vapiSDK) {
+        console.log("Vapi SDK loaded");
+        
         // Create a function to handle AI messages
         const handleMessage = (message: any) => {
+          console.log("Message from Vapi:", message);
           // Dispatch event with AI message for TranscriptListener to capture
           window.dispatchEvent(new CustomEvent('vapi_message', {
             detail: {
@@ -87,6 +90,7 @@ const Index = () => {
         // Dispatch an initial message event to trigger the video display
         // This happens immediately when the assistant is loaded
         setTimeout(() => {
+          console.log("Dispatching initial welcome message");
           window.dispatchEvent(new CustomEvent('vapi_message', {
             detail: {
               type: 'ai_message',
@@ -101,6 +105,8 @@ const Index = () => {
           assistant: assistant,
           config: customConfig
         });
+
+        console.log("Vapi instance initialized", vapiInstance);
 
         // Setup event listener for Vapi messages if the SDK supports it
         if (vapiInstance && typeof vapiInstance.addEventListener === 'function') {
