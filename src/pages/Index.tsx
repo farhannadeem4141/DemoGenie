@@ -1,5 +1,5 @@
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import Header from '@/components/Header';
 import CTA from '@/components/CTA';
 import Benefits from '@/components/Benefits';
@@ -36,12 +36,13 @@ declare global {
 
 const Index = () => {
   const { toast } = useToast();
+  const vapiInstanceRef = useRef<any>(null);
+  const hasShownWelcomeMessage = useRef(false);
 
   useEffect(() => {
     console.log("Index component mounted");
     
     // Initialize Vapi AI Assistant
-    var vapiInstance = null;
     const assistant = "607959b0-89a1-482a-ad03-66a7c86327e1"; // Assistant ID
     const apiKey = "87657dc4-df36-4fa4-b292-0a60d40d43e4"; // Public Key
     
@@ -132,53 +133,48 @@ const Index = () => {
           onTranscript: handleVoiceInput // Add handler for voice input transcripts
         };
 
-        // Dispatch an initial welcome message event to trigger the video display
-        setTimeout(() => {
-          console.log("Dispatching initial welcome message");
-          const welcomeMessage = "Welcome to WhatsApp AI Assistant. Ask me about quick replies, message templates, or other WhatsApp Business features.";
-          
-          window.dispatchEvent(new CustomEvent('vapi_message', {
-            detail: {
-              type: 'ai_message',
-              text: welcomeMessage
-            }
-          }));
-          
-          toast({
-            title: "AI Assistant Ready",
-            description: "Click the AI Assistant button to start a conversation",
-            duration: 5000,
-          });
-          
-          // Also dispatch a test message for "quick replies"
+        // Dispatch an initial welcome message event to trigger the video display - ONLY ONCE
+        if (!hasShownWelcomeMessage.current) {
+          hasShownWelcomeMessage.current = true;
           setTimeout(() => {
-            console.log("Triggering test search for 'quick replies'");
-            window.dispatchEvent(new CustomEvent('voice_input', {
+            console.log("Dispatching initial welcome message - ONE TIME ONLY");
+            const welcomeMessage = "Welcome to WhatsApp AI Assistant. Ask me about quick replies, message templates, or other WhatsApp Business features.";
+            
+            window.dispatchEvent(new CustomEvent('vapi_message', {
               detail: {
-                type: 'voice_input',
-                text: "I want to know about quick replies in WhatsApp Business"
+                type: 'ai_message',
+                text: welcomeMessage
               }
             }));
-          }, 2000);
-        }, 1500);
+            
+            toast({
+              title: "AI Assistant Ready",
+              description: "Click the AI Assistant button to start a conversation",
+              duration: 5000,
+            });
+          }, 1500);
+        }
 
-        // Initialize Vapi with the config
-        vapiInstance = window.vapiSDK.run({
-          apiKey: apiKey,
-          assistant: assistant,
-          config: customConfig
-        });
-
-        console.log("Vapi instance initialized", vapiInstance);
+        // Initialize Vapi with the config (only once)
+        if (!vapiInstanceRef.current) {
+          vapiInstanceRef.current = window.vapiSDK.run({
+            apiKey: apiKey,
+            assistant: assistant,
+            config: customConfig
+          });
+          console.log("Vapi instance initialized", vapiInstanceRef.current);
+        }
       }
     };
 
     return () => {
       // Cleanup if needed
-      if (vapiInstance && vapiInstance.destroy) {
-        vapiInstance.destroy();
+      if (vapiInstanceRef.current && vapiInstanceRef.current.destroy) {
+        vapiInstanceRef.current.destroy();
       }
-      document.body.removeChild(script);
+      if (document.body.contains(script)) {
+        document.body.removeChild(script);
+      }
     };
   }, [toast]);
 

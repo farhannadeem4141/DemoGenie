@@ -21,24 +21,43 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const videoRef = useRef<HTMLVideoElement>(null);
   const [errorLoading, setErrorLoading] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    // Set mounted flag on initial render
+    mountedRef.current = true;
+    
+    // Clean up when component unmounts
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     // Reset error state when URL changes
+    if (!mountedRef.current) return;
+    
     setErrorLoading(false);
     setIsLoading(true);
     console.log("VideoPlayer: Loading video URL:", videoUrl);
     
     // Give a little time for the component to be fully mounted before playing
     const timer = setTimeout(() => {
+      if (!mountedRef.current) return;
+      
       if (videoRef.current) {
         videoRef.current.load();
         
         // Add a event listener for when metadata is loaded
         const handleLoadedMetadata = () => {
+          if (!mountedRef.current) return;
+          
           setIsLoading(false);
           videoRef.current?.play().catch(err => {
             console.error("Error playing video:", err);
-            setErrorLoading(true);
+            if (mountedRef.current) {
+              setErrorLoading(true);
+            }
             if (onError) onError();
           });
         };
@@ -47,7 +66,9 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         
         // Return cleanup function
         return () => {
-          videoRef.current?.removeEventListener('loadedmetadata', handleLoadedMetadata);
+          if (videoRef.current) {
+            videoRef.current.removeEventListener('loadedmetadata', handleLoadedMetadata);
+          }
         };
       }
     }, 300);
@@ -58,13 +79,17 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   // Handle video errors
   const handleVideoError = () => {
     console.error("Video failed to load:", videoUrl);
-    setErrorLoading(true);
-    setIsLoading(false);
+    if (mountedRef.current) {
+      setErrorLoading(true);
+      setIsLoading(false);
+    }
     if (onError) onError();
   };
 
   // Retry loading video
   const retryLoading = () => {
+    if (!mountedRef.current) return;
+    
     setErrorLoading(false);
     setIsLoading(true);
     if (videoRef.current) {
@@ -74,7 +99,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   };
 
   return (
-    <div className={cn("rounded-lg overflow-hidden shadow-lg bg-black", className)}>
+    <div className={cn("rounded-lg overflow-hidden shadow-lg bg-black relative", className)}>
       {videoName && (
         <div className="bg-black/80 text-white p-2 text-sm font-medium">
           {videoName}
