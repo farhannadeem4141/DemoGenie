@@ -74,12 +74,13 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({ className }) =>
     // Manually trigger a test for "whatsapp payment" - ONLY ONCE
     if (!hasTriggeredInitialTest.current) {
       hasTriggeredInitialTest.current = true;
+      // Use a longer delay to ensure component is fully mounted
       const timer = setTimeout(() => {
-        console.log("Manually triggering search for 'whatsapp payment' - ONE TIME ONLY");
+        console.log("Manually triggering search for 'whatsapp payments' - ONE TIME ONLY");
         window.dispatchEvent(new CustomEvent('voice_input', {
           detail: {
             type: 'voice_input',
-            text: "whatsapp payment"
+            text: "whatsapp payments" // Use plural to test the fix
           }
         }));
       }, 2000);
