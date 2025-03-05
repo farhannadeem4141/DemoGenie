@@ -35,54 +35,22 @@ export async function searchVideosByKeyword(keyword: string): Promise<VideoSearc
     // Debug - log the exact query we're going to run
     console.log(`DEBUG: Searching for exact matches with keyword "${trimmedKeyword}"`);
     
-    // Try exact matches first (case-insensitive)
-    // FIXED: Using proper SQL syntax for ilike queries
-    const { data: exactMatches, error: exactMatchError } = await supabase
-      .from('Videos')
-      .select('*')
-      .or(`video_tag1.ilike.${trimmedKeyword},video_tag2.ilike.${trimmedKeyword},video_tag3.ilike.${trimmedKeyword}`);
+    // First attempt: Try exact match with ilike for each tag column individually
+    // This is more reliable than using the .or() method with complex conditions
+    const exactMatchResults = await Promise.all([
+      supabase.from('Videos').select('*').ilike('video_tag1', trimmedKeyword),
+      supabase.from('Videos').select('*').ilike('video_tag2', trimmedKeyword),
+      supabase.from('Videos').select('*').ilike('video_tag3', trimmedKeyword)
+    ]);
     
-    console.log("DEBUG: Exact match query response:", exactMatches);
+    // Combine results from all three queries
+    const exactMatches = exactMatchResults
+      .filter(result => !result.error && result.data && result.data.length > 0)
+      .flatMap(result => result.data || []);
     
-    if (exactMatchError) {
-      console.error('Error searching videos (exact match):', exactMatchError);
-      
-      // Let's try a simpler approach since there might be a syntax error
-      console.log("Trying alternative exact match approach");
-      const { data: altExactMatches, error: altError } = await supabase
-        .from('Videos')
-        .select('*')
-        .ilike('video_tag1', trimmedKeyword);
-      
-      if (altError) {
-        console.error('Error with alternative exact match approach:', altError);
-        return {
-          success: false,
-          data: null,
-          errorReason: `Database error during exact match search: ${exactMatchError.message}`,
-          searchDetails: {
-            keywordUsed: trimmedKeyword,
-            matchType: 'none',
-            searchMethod: "exact match failed"
-          }
-        };
-      }
-      
-      if (altExactMatches && altExactMatches.length > 0) {
-        console.log("Found exact matches using alternative approach:", altExactMatches);
-        return {
-          success: true,
-          data: altExactMatches,
-          searchDetails: {
-            keywordUsed: trimmedKeyword,
-            matchType: 'exact',
-            searchMethod: "tag exact match (alternative)"
-          }
-        };
-      }
-    } 
+    console.log("DEBUG: Exact match results:", exactMatches);
     
-    if (exactMatches && exactMatches.length > 0) {
+    if (exactMatches.length > 0) {
       console.log("Found exact matches in video tags:", exactMatches);
       return {
         success: true,
@@ -90,52 +58,28 @@ export async function searchVideosByKeyword(keyword: string): Promise<VideoSearc
         searchDetails: {
           keywordUsed: trimmedKeyword,
           matchType: 'exact',
-          searchMethod: "tag exact match"
+          searchMethod: "individual tag exact match"
         }
       };
     }
     
-    // Debug - log the exact query for partial matches
+    // Second attempt: Try case-insensitive partial match (contains) for each tag
     console.log(`DEBUG: Searching for partial matches with keyword "${trimmedKeyword}"`);
     
-    // FIXED: Using proper SQL syntax for partial matches
-    const { data: partialMatches, error: partialMatchError } = await supabase
-      .from('Videos')
-      .select('*')
-      .or(`video_tag1.ilike.%${trimmedKeyword}%,video_tag2.ilike.%${trimmedKeyword}%,video_tag3.ilike.%${trimmedKeyword}%`);
+    const partialMatchResults = await Promise.all([
+      supabase.from('Videos').select('*').ilike('video_tag1', `%${trimmedKeyword}%`),
+      supabase.from('Videos').select('*').ilike('video_tag2', `%${trimmedKeyword}%`),
+      supabase.from('Videos').select('*').ilike('video_tag3', `%${trimmedKeyword}%`)
+    ]);
     
-    console.log("DEBUG: Partial match query response:", partialMatches);
+    // Combine results from all three queries
+    const partialMatches = partialMatchResults
+      .filter(result => !result.error && result.data && result.data.length > 0)
+      .flatMap(result => result.data || []);
     
-    if (partialMatchError) {
-      console.error('Error searching videos (partial match):', partialMatchError);
-      
-      // Try direct query on each tag column individually
-      console.log("Trying individual column search");
-      const individualResults = await Promise.all([
-        supabase.from('Videos').select('*').ilike('video_tag1', trimmedKeyword),
-        supabase.from('Videos').select('*').ilike('video_tag2', trimmedKeyword),
-        supabase.from('Videos').select('*').ilike('video_tag3', trimmedKeyword)
-      ]);
-      
-      const combinedResults = individualResults
-        .filter(result => !result.error && result.data && result.data.length > 0)
-        .flatMap(result => result.data || []);
-      
-      if (combinedResults.length > 0) {
-        console.log("Found matches using individual column search:", combinedResults);
-        return {
-          success: true,
-          data: combinedResults,
-          searchDetails: {
-            keywordUsed: trimmedKeyword,
-            matchType: 'exact',
-            searchMethod: "individual column search"
-          }
-        };
-      }
-    } 
+    console.log("DEBUG: Partial match results:", partialMatches);
     
-    if (partialMatches && partialMatches.length > 0) {
+    if (partialMatches.length > 0) {
       console.log("Found partial matches in video tags:", partialMatches);
       return {
         success: true,
@@ -143,35 +87,40 @@ export async function searchVideosByKeyword(keyword: string): Promise<VideoSearc
         searchDetails: {
           keywordUsed: trimmedKeyword,
           matchType: 'partial',
-          searchMethod: "tag partial match"
+          searchMethod: "individual tag partial match"
         }
       };
     }
     
-    // If still no matches found, try with partial match on individual columns
-    console.log("Trying individual column partial match search");
-    
-    const partialIndividualResults = await Promise.all([
-      supabase.from('Videos').select('*').ilike('video_tag1', `%${trimmedKeyword}%`),
-      supabase.from('Videos').select('*').ilike('video_tag2', `%${trimmedKeyword}%`),
-      supabase.from('Videos').select('*').ilike('video_tag3', `%${trimmedKeyword}%`)
-    ]);
-    
-    const combinedPartialResults = partialIndividualResults
-      .filter(result => !result.error && result.data && result.data.length > 0)
-      .flatMap(result => result.data || []);
-    
-    if (combinedPartialResults.length > 0) {
-      console.log("Found matches using individual column partial search:", combinedPartialResults);
-      return {
-        success: true,
-        data: combinedPartialResults,
-        searchDetails: {
-          keywordUsed: trimmedKeyword,
-          matchType: 'partial',
-          searchMethod: "individual column partial search"
-        }
-      };
+    // Third attempt: Try with lowercase keyword
+    const lowercaseKeyword = trimmedKeyword.toLowerCase();
+    if (lowercaseKeyword !== trimmedKeyword) {
+      console.log(`DEBUG: Trying again with lowercase keyword "${lowercaseKeyword}"`);
+      
+      const lowercaseResults = await Promise.all([
+        supabase.from('Videos').select('*').ilike('video_tag1', `%${lowercaseKeyword}%`),
+        supabase.from('Videos').select('*').ilike('video_tag2', `%${lowercaseKeyword}%`),
+        supabase.from('Videos').select('*').ilike('video_tag3', `%${lowercaseKeyword}%`)
+      ]);
+      
+      const lowercaseMatches = lowercaseResults
+        .filter(result => !result.error && result.data && result.data.length > 0)
+        .flatMap(result => result.data || []);
+      
+      console.log("DEBUG: Lowercase match results:", lowercaseMatches);
+      
+      if (lowercaseMatches.length > 0) {
+        console.log("Found matches using lowercase keyword:", lowercaseMatches);
+        return {
+          success: true,
+          data: lowercaseMatches,
+          searchDetails: {
+            keywordUsed: lowercaseKeyword,
+            matchType: 'partial',
+            searchMethod: "lowercase search"
+          }
+        };
+      }
     }
     
     // If no matches found after trying all approaches, log and return error
