@@ -36,11 +36,11 @@ export async function searchVideosByKeyword(keyword: string): Promise<VideoSearc
     console.log(`DEBUG: Searching for exact matches with keyword "${trimmedKeyword}"`);
     
     // Try exact matches first (case-insensitive)
-    // FIXED: Using proper SQL syntax with single quotes around the search term
+    // FIXED: Using proper SQL syntax for ilike queries
     const { data: exactMatches, error: exactMatchError } = await supabase
       .from('Videos')
       .select('*')
-      .or(`video_tag1.ilike.'${trimmedKeyword}',video_tag2.ilike.'${trimmedKeyword}',video_tag3.ilike.'${trimmedKeyword}'`);
+      .or(`video_tag1.ilike.${trimmedKeyword},video_tag2.ilike.${trimmedKeyword},video_tag3.ilike.${trimmedKeyword}`);
     
     console.log("DEBUG: Exact match query response:", exactMatches);
     
@@ -98,48 +98,38 @@ export async function searchVideosByKeyword(keyword: string): Promise<VideoSearc
     // Debug - log the exact query for partial matches
     console.log(`DEBUG: Searching for partial matches with keyword "${trimmedKeyword}"`);
     
-    // FIXED: Using proper SQL syntax with single quotes around the search term
-    // If no exact matches, try partial matches (case-insensitive)
+    // FIXED: Using proper SQL syntax for partial matches
     const { data: partialMatches, error: partialMatchError } = await supabase
       .from('Videos')
       .select('*')
-      .or(`video_tag1.ilike.'%${trimmedKeyword}%',video_tag2.ilike.'%${trimmedKeyword}%',video_tag3.ilike.'%${trimmedKeyword}%'`);
+      .or(`video_tag1.ilike.%${trimmedKeyword}%,video_tag2.ilike.%${trimmedKeyword}%,video_tag3.ilike.%${trimmedKeyword}%`);
     
     console.log("DEBUG: Partial match query response:", partialMatches);
     
     if (partialMatchError) {
       console.error('Error searching videos (partial match):', partialMatchError);
       
-      // Try alternative partial match approach
-      console.log("Trying alternative partial match approach");
-      const { data: altPartialMatches, error: altPartialError } = await supabase
-        .from('Videos')
-        .select('*')
-        .ilike('video_tag1', `%${trimmedKeyword}%`);
+      // Try direct query on each tag column individually
+      console.log("Trying individual column search");
+      const individualResults = await Promise.all([
+        supabase.from('Videos').select('*').ilike('video_tag1', trimmedKeyword),
+        supabase.from('Videos').select('*').ilike('video_tag2', trimmedKeyword),
+        supabase.from('Videos').select('*').ilike('video_tag3', trimmedKeyword)
+      ]);
       
-      if (altPartialError) {
-        console.error('Error with alternative partial match approach:', altPartialError);
-        return {
-          success: false,
-          data: null,
-          errorReason: `Database error during partial match search: ${partialMatchError.message}`,
-          searchDetails: {
-            keywordUsed: trimmedKeyword,
-            matchType: 'none',
-            searchMethod: "partial match failed"
-          }
-        };
-      }
+      const combinedResults = individualResults
+        .filter(result => !result.error && result.data && result.data.length > 0)
+        .flatMap(result => result.data || []);
       
-      if (altPartialMatches && altPartialMatches.length > 0) {
-        console.log("Found partial matches using alternative approach:", altPartialMatches);
+      if (combinedResults.length > 0) {
+        console.log("Found matches using individual column search:", combinedResults);
         return {
           success: true,
-          data: altPartialMatches,
+          data: combinedResults,
           searchDetails: {
             keywordUsed: trimmedKeyword,
-            matchType: 'partial',
-            searchMethod: "tag partial match (alternative)"
+            matchType: 'exact',
+            searchMethod: "individual column search"
           }
         };
       }
@@ -158,33 +148,9 @@ export async function searchVideosByKeyword(keyword: string): Promise<VideoSearc
       };
     }
     
-    // If still no matches found, try direct query on each tag column individually
-    console.log("Trying individual column search as last resort");
+    // If still no matches found, try with partial match on individual columns
+    console.log("Trying individual column partial match search");
     
-    const individualResults = await Promise.all([
-      supabase.from('Videos').select('*').ilike('video_tag1', trimmedKeyword),
-      supabase.from('Videos').select('*').ilike('video_tag2', trimmedKeyword),
-      supabase.from('Videos').select('*').ilike('video_tag3', trimmedKeyword)
-    ]);
-    
-    const combinedResults = individualResults
-      .filter(result => !result.error && result.data && result.data.length > 0)
-      .flatMap(result => result.data || []);
-    
-    if (combinedResults.length > 0) {
-      console.log("Found matches using individual column search:", combinedResults);
-      return {
-        success: true,
-        data: combinedResults,
-        searchDetails: {
-          keywordUsed: trimmedKeyword,
-          matchType: 'exact',
-          searchMethod: "individual column search"
-        }
-      };
-    }
-    
-    // Lastly, try partial match with individual columns
     const partialIndividualResults = await Promise.all([
       supabase.from('Videos').select('*').ilike('video_tag1', `%${trimmedKeyword}%`),
       supabase.from('Videos').select('*').ilike('video_tag2', `%${trimmedKeyword}%`),
@@ -208,7 +174,7 @@ export async function searchVideosByKeyword(keyword: string): Promise<VideoSearc
       };
     }
     
-    // If no matches found, log and return error
+    // If no matches found after trying all approaches, log and return error
     console.log("No matches found for keyword:", trimmedKeyword);
     return {
       success: false,
