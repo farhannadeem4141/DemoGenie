@@ -1,7 +1,7 @@
-
 import { useState, useEffect } from 'react';
 import { searchVideosByKeyword } from '@/services/videoService';
 import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 
 interface Message {
   text: string;
@@ -19,6 +19,7 @@ export function useConversationHistory() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [matchedVideos, setMatchedVideos] = useState<VideoMatch[]>([]);
   const [currentVideo, setCurrentVideo] = useState<VideoMatch | null>(null);
+  const { toast } = useToast();
   
   // Load conversation history from localStorage on mount
   useEffect(() => {
@@ -69,6 +70,14 @@ export function useConversationHistory() {
               video_name: 'What is WhatsApp',
               keyword: 'WhatsApp'
             });
+            
+            // Show toast for fallback video
+            toast({
+              title: "Using fallback video",
+              description: "Could not fetch video data from database",
+              duration: 3000,
+            });
+            
             return;
           }
           
@@ -86,6 +95,12 @@ export function useConversationHistory() {
           
           console.log("Setting initial video:", videoData);
           setCurrentVideo(videoData);
+          
+          toast({
+            title: "Video loaded",
+            description: `Now playing: ${videoData.video_name}`,
+            duration: 3000,
+          });
         } else {
           // Fallback in case we got data but no video_url
           setCurrentVideo({
@@ -93,6 +108,12 @@ export function useConversationHistory() {
             video_url: 'https://aalbdeydgpallvcmmsvq.supabase.co/storage/v1/object/sign/DemoGenie/What%20is%20WhatsApp.mp4?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1cmwiOiJEZW1vR2VuaWUvV2hhdCBpcyBXaGF0c0FwcC5tcDQiLCJpYXQiOjE3NDExMDI1OTEsImV4cCI6MTc3MjYzODU5MX0.285hWWaFnlZJ8wLkuYaAyf_sLH0wjDzxv4kgXsGEzO4',
             video_name: 'What is WhatsApp',
             keyword: 'WhatsApp'
+          });
+          
+          toast({
+            title: "Using fallback video",
+            description: "Missing video URL in database",
+            duration: 3000,
           });
         }
       } catch (error) {
@@ -104,37 +125,50 @@ export function useConversationHistory() {
           video_name: 'What is WhatsApp',
           keyword: 'WhatsApp'
         });
+        
+        toast({
+          variant: "destructive",
+          title: "Error loading video",
+          description: "Using fallback video due to an error",
+          duration: 3000,
+        });
       }
     };
     
     fetchInitialVideo();
-  }, []);
+  }, [toast]);
   
   // Function to extract potential keywords from a message
   const extractKeywords = (text: string): string[] => {
-    // Remove punctuation and convert to lowercase
+    // Convert to lowercase and clean the text
     const cleanText = text.toLowerCase().replace(/[^\w\s]/g, '');
     
-    // Split by spaces and filter out short words
-    const words = cleanText.split(/\s+/).filter(word => word.length > 3);
-    
-    // Important phrases to check for (add more as needed)
+    // Directly check for important specific phrases first
     const phrases = [
       "quick replies", 
+      "quick reply",
       "message templates", 
       "whatsapp business",
-      "business profile"
+      "business profile",
+      "templates"
     ];
     
+    // Check if any of our important phrases are in the text
     const foundPhrases = phrases.filter(phrase => 
       text.toLowerCase().includes(phrase.toLowerCase())
     );
     
-    // Combine individual words and found phrases
-    const keywords = [...new Set([...words, ...foundPhrases])];
-    console.log("Extracted keywords:", keywords);
+    // If we found important phrases, prioritize them
+    if (foundPhrases.length > 0) {
+      console.log("Found important phrases:", foundPhrases);
+      return foundPhrases;
+    }
     
-    return keywords;
+    // Otherwise, split by spaces and filter out short words
+    const words = cleanText.split(/\s+/).filter(word => word.length > 3);
+    
+    console.log("Extracted keywords:", words);
+    return [...new Set(words)]; // Remove duplicates
   };
   
   // Function to add a new message and search for keywords
@@ -146,23 +180,72 @@ export function useConversationHistory() {
     // Extract keywords and search for videos
     const keywords = extractKeywords(text);
     
+    if (keywords.length === 0) {
+      console.log("No keywords found in message");
+      toast({
+        title: "No keywords found",
+        description: "Couldn't extract any keywords from the message",
+        duration: 3000,
+      });
+      return;
+    }
+    
     // Search for each keyword
     console.log("Searching for videos with keywords:", keywords);
-    const videoPromises = keywords.map(async keyword => {
+    
+    // First try high-priority keywords (phrases we specifically care about)
+    const highPriorityKeywords = ["quick replies", "quick reply", "message templates", "templates", "whatsapp business"];
+    const priorityKeyword = keywords.find(kw => highPriorityKeywords.includes(kw.toLowerCase()));
+    
+    if (priorityKeyword) {
+      console.log("Found high priority keyword:", priorityKeyword);
+      const videos = await searchVideosByKeyword(priorityKeyword);
+      
+      if (videos && videos.length > 0) {
+        const matchedVideos = videos.map(video => ({ ...video, keyword: priorityKeyword }));
+        setMatchedVideos(matchedVideos);
+        console.log("Setting current video to high priority match:", matchedVideos[0]);
+        setCurrentVideo(matchedVideos[0]);
+        
+        toast({
+          title: "Video found",
+          description: `Now playing: ${matchedVideos[0].video_name || matchedVideos[0].keyword}`,
+          duration: 3000,
+        });
+        return;
+      }
+    }
+    
+    // If no high priority keywords or no results, try all keywords
+    let foundAnyVideos = false;
+    
+    for (const keyword of keywords) {
       const videos = await searchVideosByKeyword(keyword);
-      return videos.map(video => ({ ...video, keyword }));
-    });
+      
+      if (videos && videos.length > 0) {
+        foundAnyVideos = true;
+        const matchedVideos = videos.map(video => ({ ...video, keyword }));
+        setMatchedVideos(matchedVideos);
+        console.log("Setting current video to:", matchedVideos[0]);
+        setCurrentVideo(matchedVideos[0]);
+        
+        toast({
+          title: "Video found",
+          description: `Now playing: ${matchedVideos[0].video_name || keyword}`,
+          duration: 3000,
+        });
+        break; // Exit after finding first match
+      }
+    }
     
-    const results = await Promise.all(videoPromises);
-    const allMatches = results.flat();
-    
-    console.log("Found video matches:", allMatches);
-    if (allMatches.length > 0) {
-      setMatchedVideos(allMatches);
-      console.log("Setting current video to:", allMatches[0]);
-      setCurrentVideo(allMatches[0]);
-    } else {
+    if (!foundAnyVideos) {
       console.log("No matching videos found for keywords:", keywords);
+      toast({
+        variant: "destructive",
+        title: "No videos found",
+        description: "No matching videos for your query",
+        duration: 3000,
+      });
     }
   };
   

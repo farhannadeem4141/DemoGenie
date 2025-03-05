@@ -40,19 +40,48 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({ className }) =>
         
         // Show toast notification
         toast({
-          title: "AI Message Received",
+          title: "Message Received",
           description: "Processing message to find relevant videos...",
           duration: 3000,
         });
       }
     };
 
-    // Setup event listener
+    // Set up another event listener specifically for voice input
+    const captureVoiceInput = (event: any) => {
+      if (event.detail && event.detail.type === 'voice_input' && event.detail.text) {
+        console.log("Received voice input:", event.detail.text);
+        
+        // Process the voice input to find matching videos
+        addMessage(event.detail.text);
+        
+        // Show toast notification
+        toast({
+          title: "Voice Input Received",
+          description: `Processing: "${event.detail.text.substring(0, 30)}${event.detail.text.length > 30 ? '...' : ''}"`,
+          duration: 3000,
+        });
+      }
+    };
+
+    // Setup event listeners
     window.addEventListener('vapi_message', captureAiMessages);
-    console.log("TranscriptListener: Set up vapi_message event listener");
+    window.addEventListener('voice_input', captureVoiceInput);
+    
+    console.log("TranscriptListener: Set up event listeners for vapi_message and voice_input");
+
+    // Manually trigger a test for "quick replies" for debugging
+    console.log("Manually triggering search for 'quick replies'");
+    window.dispatchEvent(new CustomEvent('voice_input', {
+      detail: {
+        type: 'voice_input',
+        text: "I want to know about quick replies"
+      }
+    }));
 
     return () => {
       window.removeEventListener('vapi_message', captureAiMessages);
+      window.removeEventListener('voice_input', captureVoiceInput);
     };
   }, [addMessage, toast]);
 
@@ -67,10 +96,10 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({ className }) =>
   };
 
   return (
-    <div className={cn("fixed right-4 bottom-24 w-80 transition-all", className)}>
+    <div className={cn("fixed right-4 bottom-24 w-80 z-50 transition-all", className)}>
       {currentVideo && currentVideo.video_url && (
         <div className={cn(
-          "mb-4 transform transition-all duration-300 ease-in-out",
+          "mb-4 transform transition-all duration-300 ease-in-out shadow-lg rounded-lg overflow-hidden",
           isVideoVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
         )}>
           <VideoPlayer 

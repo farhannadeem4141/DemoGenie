@@ -100,11 +100,36 @@ const Index = () => {
             duration: 5000,
           });
         };
+        
+        // Handle voice input
+        const handleVoiceInput = (input: any) => {
+          console.log("Voice input received:", input);
+          
+          if (input && input.transcript) {
+            console.log("Voice transcript:", input.transcript);
+            
+            // Dispatch event with voice input for TranscriptListener to capture
+            window.dispatchEvent(new CustomEvent('voice_input', {
+              detail: {
+                type: 'voice_input',
+                text: input.transcript
+              }
+            }));
+            
+            // Show toast for voice input
+            toast({
+              title: "Voice Input",
+              description: input.transcript.substring(0, 100) + (input.transcript.length > 100 ? "..." : ""),
+              duration: 3000,
+            });
+          }
+        };
 
         // Initialize Vapi with the config 
         const customConfig = {
           ...buttonConfig,
-          onMessage: handleMessage
+          onMessage: handleMessage,
+          onTranscript: handleVoiceInput // Add handler for voice input transcripts
         };
 
         // Dispatch an initial welcome message event to trigger the video display
@@ -124,6 +149,17 @@ const Index = () => {
             description: "Click the AI Assistant button to start a conversation",
             duration: 5000,
           });
+          
+          // Also dispatch a test message for "quick replies"
+          setTimeout(() => {
+            console.log("Triggering test search for 'quick replies'");
+            window.dispatchEvent(new CustomEvent('voice_input', {
+              detail: {
+                type: 'voice_input',
+                text: "I want to know about quick replies in WhatsApp Business"
+              }
+            }));
+          }, 2000);
         }, 1500);
 
         // Initialize Vapi with the config
@@ -134,22 +170,6 @@ const Index = () => {
         });
 
         console.log("Vapi instance initialized", vapiInstance);
-
-        // Setup event listener for Vapi messages if the SDK supports it
-        if (vapiInstance && typeof vapiInstance.addEventListener === 'function') {
-          vapiInstance.addEventListener('message', handleMessage);
-        }
-        
-        // Manually trigger a search for "quick replies" for testing purposes
-        setTimeout(() => {
-          console.log("Triggering test search for 'quick replies'");
-          window.dispatchEvent(new CustomEvent('vapi_message', {
-            detail: {
-              type: 'ai_message',
-              text: "Here's information about quick replies in WhatsApp Business."
-            }
-          }));
-        }, 3000);
       }
     };
 
