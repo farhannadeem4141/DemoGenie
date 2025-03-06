@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 
 export interface VideoSearchResult {
@@ -17,7 +18,11 @@ export async function queryVideosWithCatalogTag() {
   const { data, error } = await supabase
     .from('Videos')
     .select('*')
-    .or('video_tag1.eq.catalog,video_tag2.eq.catalog,video_tag3.eq.catalog');
+    .or([
+      'video_tag1.eq.catalog',
+      'video_tag2.eq.catalog',
+      'video_tag3.eq.catalog'
+    ].join(','));
   
   console.log("Direct catalog query results:", data);
   console.log("Direct catalog query error:", error);
