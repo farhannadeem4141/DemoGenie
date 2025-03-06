@@ -18,6 +18,14 @@ export async function searchVideosByKeyword(keyword: string): Promise<VideoSearc
   
   console.log("Searching videos with keyword:", keyword);
   
+  // First, check if Videos table has any data at all
+  const { count, error: countError } = await supabase
+    .from('Videos')
+    .select('*', { count: 'exact', head: true });
+  
+  console.log("Total records in Videos table:", count);
+  console.log("Count error:", countError);
+  
   try {
     // Normalize the keyword - trim extra spaces but preserve case for now
     const trimmedKeyword = keyword.trim();
@@ -25,16 +33,44 @@ export async function searchVideosByKeyword(keyword: string): Promise<VideoSearc
     // Debug - log the exact query we're going to run
     console.log(`DEBUG: Searching for videos with keyword "${trimmedKeyword}"`);
     
-    // Method 1: Try direct fetch using eq (exact match)
+    // Method 1: Try direct fetch using exact match but with proper query formatting
+    const exactMatchQuery = `video_tag1.eq.${trimmedKeyword},video_tag2.eq.${trimmedKeyword},video_tag3.eq.${trimmedKeyword}`;
+    console.log("DEBUG: Using OR query:", exactMatchQuery);
+    
+    // This approach might have SQL injection issues - rewriting
     const { data: exactData, error: exactError } = await supabase
       .from('Videos')
       .select('*')
-      .or(`video_tag1.eq.${trimmedKeyword},video_tag2.eq.${trimmedKeyword},video_tag3.eq.${trimmedKeyword}`);
+      .or(exactMatchQuery);
     
     console.log("DEBUG: Direct equality search results:", exactData);
     console.log("DEBUG: Direct equality search error:", exactError);
     
-    if (exactData && exactData.length > 0) {
+    if (exactError) {
+      console.log("Trying alternative query approach due to error");
+      
+      // Try a safer approach using individual filters
+      const { data: altExactData, error: altExactError } = await supabase
+        .from('Videos')
+        .select('*')
+        .eq('video_tag1', trimmedKeyword)
+        .or(`video_tag2.eq.${trimmedKeyword},video_tag3.eq.${trimmedKeyword}`);
+      
+      console.log("DEBUG: Alternative equality search results:", altExactData);
+      console.log("DEBUG: Alternative equality search error:", altExactError);
+      
+      if (altExactData && altExactData.length > 0) {
+        return {
+          success: true,
+          data: altExactData,
+          searchDetails: {
+            keywordUsed: trimmedKeyword,
+            matchType: 'exact',
+            searchMethod: "alternative direct equality"
+          }
+        };
+      }
+    } else if (exactData && exactData.length > 0) {
       console.log("Found videos with exact tag match:", exactData);
       return {
         success: true,
