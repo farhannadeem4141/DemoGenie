@@ -1,5 +1,6 @@
+
 import { useState, useEffect } from 'react';
-import { searchVideosByKeyword, VideoSearchResult } from '@/services/videoService';
+import { searchVideosByKeyword, VideoSearchResult } from '@/services/video';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
