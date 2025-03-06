@@ -7,7 +7,7 @@ export interface VideoSearchResult {
   errorReason?: string;
   searchDetails?: {
     keywordUsed: string;
-    matchType?: 'exact' | 'partial' | 'none';
+    matchType?: 'exact' | 'partial' | 'none' | 'fallback';
     searchMethod?: string;
   };
 }
