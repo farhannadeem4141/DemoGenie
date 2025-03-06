@@ -5,6 +5,7 @@ import VideoPlayer from './VideoPlayer';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { AlertTriangle, X, Mic } from 'lucide-react';
+import { queryVideosWithCatalogTag } from '@/services/video';
 
 interface TranscriptListenerProps {
   className?: string;
@@ -50,9 +51,37 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({ className }) =>
     };
 
     // Set up another event listener specifically for voice input
-    const captureVoiceInput = (event: any) => {
+    const captureVoiceInput = async (event: any) => {
       if (event.detail && event.detail.type === 'voice_input' && event.detail.text) {
         console.log("Received voice input:", event.detail.text);
+        const inputText = event.detail.text.toLowerCase();
+        
+        // Special handling for catalog keyword
+        if (inputText.includes('catalog')) {
+          console.log("Catalog keyword detected, using specialized catalog query");
+          try {
+            const result = await queryVideosWithCatalogTag();
+            if (result.success && result.data && result.data.length > 0) {
+              const catalogVideo = {
+                id: result.data[0].id,
+                video_url: result.data[0].video_url,
+                video_name: result.data[0].video_name || 'Catalog Feature',
+                keyword: 'catalog'
+              };
+              console.log("Setting catalog video directly:", catalogVideo);
+              setCurrentVideo(catalogVideo);
+              
+              toast({
+                title: "Catalog Video Found",
+                description: `Now playing: ${catalogVideo.video_name}`,
+                duration: 3000,
+              });
+              return;
+            }
+          } catch (error) {
+            console.error("Error in direct catalog query:", error);
+          }
+        }
         
         // Process the voice input to find matching videos
         addMessage(event.detail.text);
@@ -76,7 +105,7 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({ className }) =>
       window.removeEventListener('vapi_message', captureAiMessages);
       window.removeEventListener('voice_input', captureVoiceInput);
     };
-  }, [addMessage, toast]);
+  }, [addMessage, toast, setCurrentVideo]);
 
   // Handle video error
   const handleVideoError = () => {
@@ -120,6 +149,12 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({ className }) =>
     }));
   };
 
+  // Add a test button specifically for catalog
+  const testCatalogKeyword = () => {
+    console.log("Testing catalog keyword specifically");
+    simulateVoiceInput("catalog");
+  };
+
   return (
     <div className={cn("fixed right-4 bottom-24 w-80 z-50 transition-all", className)}>
       {/* Test buttons for simulating voice input */}
@@ -131,6 +166,15 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({ className }) =>
         >
           <Mic size={20} />
           <span className="sr-only">Test Catalog Voice Input</span>
+        </button>
+        
+        <button 
+          onClick={testCatalogKeyword}
+          className="p-2 rounded-full shadow-lg bg-blue-500 text-white hover:bg-blue-600 transition-colors"
+          title="Test just 'Catalog' keyword"
+        >
+          <Mic size={20} />
+          <span className="sr-only">Test Catalog Keyword</span>
         </button>
         
         <button 
