@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 
 export interface VideoSearchResult {
@@ -10,6 +9,20 @@ export interface VideoSearchResult {
     matchType?: 'exact' | 'partial' | 'none' | 'fallback';
     searchMethod?: string;
   };
+}
+
+export async function queryVideosWithCatalogTag() {
+  console.log("Running direct catalog query...");
+  
+  const { data, error } = await supabase
+    .from('Videos')
+    .select('*')
+    .or('video_tag1.eq.catalog,video_tag2.eq.catalog,video_tag3.eq.catalog');
+  
+  console.log("Direct catalog query results:", data);
+  console.log("Direct catalog query error:", error);
+  
+  return { success: !error, data, error };
 }
 
 export async function searchVideosByKeyword(keyword: string): Promise<VideoSearchResult> {
