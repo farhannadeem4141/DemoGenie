@@ -4,7 +4,7 @@ import { useConversationHistory } from '@/hooks/useConversationHistory';
 import VideoPlayer from './VideoPlayer';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
-import { AlertTriangle, X } from 'lucide-react';
+import { AlertTriangle, X, Mic } from 'lucide-react';
 
 interface TranscriptListenerProps {
   className?: string;
@@ -109,10 +109,30 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({ className }) =>
     return `${date.toLocaleDateString()} ${date.toLocaleTimeString()}`;
   };
 
+  // Simulate voice input for testing purposes
+  const simulateVoiceInput = (text: string) => {
+    console.log("Simulating voice input:", text);
+    window.dispatchEvent(new CustomEvent('voice_input', {
+      detail: {
+        type: 'voice_input',
+        text: text
+      }
+    }));
+  };
+
   return (
     <div className={cn("fixed right-4 bottom-24 w-80 z-50 transition-all", className)}>
-      {/* Error log toggle button */}
-      <div className="mb-3 flex justify-end">
+      {/* Test buttons for simulating voice input */}
+      <div className="mb-3 flex justify-end gap-2">
+        <button 
+          onClick={() => simulateVoiceInput("Tell me about the catalog feature")}
+          className="p-2 rounded-full shadow-lg bg-green-500 text-white hover:bg-green-600 transition-colors"
+          title="Test 'Catalog' voice input"
+        >
+          <Mic size={20} />
+          <span className="sr-only">Test Catalog Voice Input</span>
+        </button>
+        
         <button 
           onClick={() => setShowErrorLog(!showErrorLog)}
           className={cn(
