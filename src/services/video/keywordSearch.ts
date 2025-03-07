@@ -21,7 +21,9 @@ export async function searchVideosByKeyword(keyword: string): Promise<VideoSearc
     
     query = query.or(exactQuery + ',' + icontainsQuery);
     
-    console.log("%c [DB QUERY] SQL query: " + query.toSql(), "background: #ff9e00; color: black; padding: 2px; border-radius: 4px;");
+    // Generate query string for logging (without toSql method)
+    const queryString = `SELECT * FROM "Videos" WHERE ${exactQuery} OR ${icontainsQuery}`;
+    console.log("%c [DB QUERY] SQL query: " + queryString, "background: #ff9e00; color: black; padding: 2px; border-radius: 4px;");
     
     // Execute the query
     const { data, error } = await query;
@@ -35,8 +37,12 @@ export async function searchVideosByKeyword(keyword: string): Promise<VideoSearc
       return {
         success: false,
         errorReason: error.message,
-        searchDetails: `Search for "${normalizedKeyword}" failed with database error`,
-        rawQuery: query.toSql()
+        searchDetails: {
+          keywordUsed: normalizedKeyword,
+          matchType: 'none',
+          searchMethod: 'database error'
+        },
+        rawQuery: queryString
       };
     }
     
@@ -51,7 +57,9 @@ export async function searchVideosByKeyword(keyword: string): Promise<VideoSearc
         .select('*')
         .or(`video_tag1.ilike.%${normalizedKeyword.toLowerCase()}%,video_tag2.ilike.%${normalizedKeyword.toLowerCase()}%,video_tag3.ilike.%${normalizedKeyword.toLowerCase()}%`);
       
-      console.log("%c [DB QUERY] Lenient SQL query: " + lenientQuery.toSql(), "background: #ff9e00; color: black; padding: 2px; border-radius: 4px;");
+      // Generate lenient query string for logging
+      const lenientQueryString = `SELECT * FROM "Videos" WHERE video_tag1 ILIKE %${normalizedKeyword.toLowerCase()}% OR video_tag2 ILIKE %${normalizedKeyword.toLowerCase()}% OR video_tag3 ILIKE %${normalizedKeyword.toLowerCase()}%`;
+      console.log("%c [DB QUERY] Lenient SQL query: " + lenientQueryString, "background: #ff9e00; color: black; padding: 2px; border-radius: 4px;");
       
       const { data: lenientData, error: lenientError } = await lenientQuery;
       
@@ -62,8 +70,12 @@ export async function searchVideosByKeyword(keyword: string): Promise<VideoSearc
         return {
           success: false,
           errorReason: lenientError.message,
-          searchDetails: `Lenient search for "${normalizedKeyword}" failed with database error`,
-          rawQuery: lenientQuery.toSql()
+          searchDetails: {
+            keywordUsed: normalizedKeyword,
+            matchType: 'none',
+            searchMethod: 'lenient search error'
+          },
+          rawQuery: lenientQueryString
         };
       }
       
@@ -71,8 +83,12 @@ export async function searchVideosByKeyword(keyword: string): Promise<VideoSearc
         return {
           success: false,
           errorReason: 'No videos found',
-          searchDetails: `No videos found for "${normalizedKeyword}" with both exact and lenient search`,
-          rawQuery: lenientQuery.toSql()
+          searchDetails: {
+            keywordUsed: normalizedKeyword,
+            matchType: 'none',
+            searchMethod: 'both exact and lenient search'
+          },
+          rawQuery: lenientQueryString
         };
       }
       
@@ -80,8 +96,12 @@ export async function searchVideosByKeyword(keyword: string): Promise<VideoSearc
       return {
         success: true,
         data: lenientData,
-        searchDetails: `Found ${lenientData.length} videos with lenient search for "${normalizedKeyword}"`,
-        rawQuery: lenientQuery.toSql()
+        searchDetails: {
+          keywordUsed: normalizedKeyword,
+          matchType: 'partial',
+          searchMethod: 'lenient search'
+        },
+        rawQuery: lenientQueryString
       };
     }
     
@@ -89,15 +109,23 @@ export async function searchVideosByKeyword(keyword: string): Promise<VideoSearc
     return {
       success: true,
       data,
-      searchDetails: `Found ${data.length} videos for "${normalizedKeyword}"`,
-      rawQuery: query.toSql()
+      searchDetails: {
+        keywordUsed: normalizedKeyword,
+        matchType: 'exact',
+        searchMethod: 'primary search'
+      },
+      rawQuery: queryString
     };
   } catch (error) {
     console.error('Exception in searchVideosByKeyword:', error);
     return {
       success: false,
       errorReason: error instanceof Error ? error.message : 'Unknown error',
-      searchDetails: `Exception during search for "${keyword}"`,
+      searchDetails: {
+        keywordUsed: keyword,
+        matchType: 'none',
+        searchMethod: 'exception'
+      },
       rawQuery: 'Error: Query construction failed'
     };
   }
