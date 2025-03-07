@@ -53,14 +53,22 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({ className }) =>
     // Set up another event listener specifically for voice input
     const captureVoiceInput = async (event: any) => {
       if (event.detail && event.detail.type === 'voice_input' && event.detail.text) {
-        console.log("Received voice input:", event.detail.text);
+        console.log("%c [VOICE LOG] Received voice input: " + event.detail.text, "background: #2a9d8f; color: white; padding: 2px; border-radius: 4px;");
         const inputText = event.detail.text.toLowerCase();
+        console.log("%c [VOICE LOG] Normalized input (lowercase): " + inputText, "background: #2a9d8f; color: white; padding: 2px; border-radius: 4px;");
+        
+        // Log exact input for debugging case sensitivity
+        console.log("%c [VOICE LOG] Original case input: " + event.detail.text, "background: #2a9d8f; color: white; padding: 2px; border-radius: 4px;");
+        console.log("%c [VOICE LOG] Input contains 'business profile'? " + inputText.includes('business profile'), "background: #2a9d8f; color: white; padding: 2px; border-radius: 4px;");
+        console.log("%c [VOICE LOG] Input contains 'business'? " + inputText.includes('business'), "background: #2a9d8f; color: white; padding: 2px; border-radius: 4px;");
+        console.log("%c [VOICE LOG] Input contains 'profile'? " + inputText.includes('profile'), "background: #2a9d8f; color: white; padding: 2px; border-radius: 4px;");
         
         // Special handling for catalog keyword
         if (inputText.includes('catalog')) {
-          console.log("Catalog keyword detected, using specialized catalog query");
+          console.log("%c [VOICE LOG] Catalog keyword detected, using specialized catalog query", "background: #e76f51; color: white; padding: 2px; border-radius: 4px;");
           try {
             const result = await queryVideosWithCatalogTag();
+            console.log("%c [VOICE LOG] Catalog query result: ", "background: #e76f51; color: white; padding: 2px; border-radius: 4px;", result);
             if (result.success && result.data && result.data.length > 0) {
               const catalogVideo = {
                 id: result.data[0].id,
@@ -68,7 +76,7 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({ className }) =>
                 video_name: result.data[0].video_name || 'Catalog Feature',
                 keyword: 'catalog'
               };
-              console.log("Setting catalog video directly:", catalogVideo);
+              console.log("%c [VOICE LOG] Setting catalog video directly:", "background: #e76f51; color: white; padding: 2px; border-radius: 4px;", catalogVideo);
               setCurrentVideo(catalogVideo);
               
               toast({
@@ -79,7 +87,7 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({ className }) =>
               return;
             }
           } catch (error) {
-            console.error("Error in direct catalog query:", error);
+            console.error("%c [VOICE LOG] Error in direct catalog query:", "background: #e63946; color: white; padding: 2px; border-radius: 4px;", error);
           }
         }
         
@@ -140,7 +148,7 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({ className }) =>
 
   // Simulate voice input for testing purposes
   const simulateVoiceInput = (text: string) => {
-    console.log("Simulating voice input:", text);
+    console.log("%c [VOICE LOG] Simulating voice input: " + text, "background: #2a9d8f; color: white; padding: 2px; border-radius: 4px;");
     window.dispatchEvent(new CustomEvent('voice_input', {
       detail: {
         type: 'voice_input',
@@ -149,10 +157,16 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({ className }) =>
     }));
   };
 
-  // Add a test button specifically for catalog
+  // Add test buttons for different inputs
   const testCatalogKeyword = () => {
-    console.log("Testing catalog keyword specifically");
+    console.log("%c [VOICE LOG] Testing catalog keyword specifically", "background: #e76f51; color: white; padding: 2px; border-radius: 4px;");
     simulateVoiceInput("catalog");
+  };
+  
+  // Add a test specifically for Business Profile
+  const testBusinessProfile = () => {
+    console.log("%c [VOICE LOG] Testing 'Business Profile' keyword specifically", "background: #f4a261; color: white; padding: 2px; border-radius: 4px;");
+    simulateVoiceInput("Business Profile");
   };
 
   return (
@@ -175,6 +189,15 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({ className }) =>
         >
           <Mic size={20} />
           <span className="sr-only">Test Catalog Keyword</span>
+        </button>
+        
+        <button 
+          onClick={testBusinessProfile}
+          className="p-2 rounded-full shadow-lg bg-purple-500 text-white hover:bg-purple-600 transition-colors"
+          title="Test 'Business Profile' keyword"
+        >
+          <Mic size={20} />
+          <span className="sr-only">Test Business Profile</span>
         </button>
         
         <button 

@@ -4,6 +4,7 @@ import { VideoSearchResult } from "./types";
 
 export async function searchVideosByKeyword(keyword: string): Promise<VideoSearchResult> {
   if (!keyword) {
+    console.log("%c [DB SEARCH] Error: No keyword provided", "background: #ff8c00; color: black; padding: 2px; border-radius: 4px;");
     return { 
       success: false, 
       data: [], 
@@ -16,26 +17,53 @@ export async function searchVideosByKeyword(keyword: string): Promise<VideoSearc
     };
   }
   
-  console.log("Searching videos with keyword:", keyword);
+  console.log("%c [DB SEARCH] Searching videos with keyword: " + keyword, "background: #ff8c00; color: black; padding: 2px; border-radius: 4px;");
   
   // First, check if Videos table has any data at all
   const { count, error: countError } = await supabase
     .from('Videos')
     .select('*', { count: 'exact', head: true });
   
-  console.log("Total records in Videos table:", count);
-  console.log("Count error:", countError);
+  console.log("%c [DB SEARCH] Total records in Videos table: " + count, "background: #ff8c00; color: black; padding: 2px; border-radius: 4px;");
+  if (countError) {
+    console.log("%c [DB SEARCH] Count error: ", "background: #ff8c00; color: black; padding: 2px; border-radius: 4px;", countError);
+  }
   
   try {
     // Normalize the keyword - trim extra spaces but preserve case for now
     const trimmedKeyword = keyword.trim();
     
     // Debug - log the exact query we're going to run
-    console.log(`DEBUG: Searching for videos with keyword "${trimmedKeyword}"`);
+    console.log(`%c [DB SEARCH] Searching for videos with keyword "${trimmedKeyword}"`, "background: #ff8c00; color: black; padding: 2px; border-radius: 4px;");
+    
+    // Directly check for "Business Profile" with special debug logs
+    if (trimmedKeyword.toLowerCase() === "business profile") {
+      console.log("%c [DB SEARCH] Special debug for Business Profile keyword detected", "background: #ff8c00; color: black; padding: 2px; border-radius: 4px;");
+      
+      // Log all tag columns in the database
+      const { data: allData } = await supabase.from('Videos').select('*');
+      console.log("%c [DB SEARCH] All videos in database:", "background: #ff8c00; color: black; padding: 2px; border-radius: 4px;", allData);
+      
+      if (allData) {
+        // Log any videos that might match Business Profile
+        allData.forEach((video, index) => {
+          console.log(`%c [DB SEARCH] Video #${index + 1} tags:`, "background: #ff8c00; color: black; padding: 2px; border-radius: 4px;", {
+            id: video.id,
+            video_name: video.video_name,
+            tag1: video.video_tag1,
+            tag2: video.video_tag2,
+            tag3: video.video_tag3,
+            tag1_match: video.video_tag1?.toLowerCase() === "business profile",
+            tag2_match: video.video_tag2?.toLowerCase() === "business profile",
+            tag3_match: video.video_tag3?.toLowerCase() === "business profile"
+          });
+        });
+      }
+    }
     
     // Method 1: Try direct fetch using exact match but with proper query formatting
     const exactMatchQuery = `video_tag1.eq.${trimmedKeyword},video_tag2.eq.${trimmedKeyword},video_tag3.eq.${trimmedKeyword}`;
-    console.log("DEBUG: Using OR query:", exactMatchQuery);
+    console.log("%c [DB SEARCH] Using OR query: " + exactMatchQuery, "background: #ff8c00; color: black; padding: 2px; border-radius: 4px;");
     
     // This approach might have SQL injection issues - rewriting
     const { data: exactData, error: exactError } = await supabase
@@ -43,11 +71,13 @@ export async function searchVideosByKeyword(keyword: string): Promise<VideoSearc
       .select('*')
       .or(exactMatchQuery);
     
-    console.log("DEBUG: Direct equality search results:", exactData);
-    console.log("DEBUG: Direct equality search error:", exactError);
+    console.log("%c [DB SEARCH] Direct equality search results:", "background: #ff8c00; color: black; padding: 2px; border-radius: 4px;", exactData);
+    if (exactError) {
+      console.log("%c [DB SEARCH] Direct equality search error:", "background: #ff8c00; color: black; padding: 2px; border-radius: 4px;", exactError);
+    }
     
     if (exactError) {
-      console.log("Trying alternative query approach due to error");
+      console.log("%c [DB SEARCH] Trying alternative query approach due to error", "background: #ff8c00; color: black; padding: 2px; border-radius: 4px;");
       
       // Try a safer approach using individual filters
       const { data: altExactData, error: altExactError } = await supabase
@@ -56,10 +86,13 @@ export async function searchVideosByKeyword(keyword: string): Promise<VideoSearc
         .eq('video_tag1', trimmedKeyword)
         .or(`video_tag2.eq.${trimmedKeyword},video_tag3.eq.${trimmedKeyword}`);
       
-      console.log("DEBUG: Alternative equality search results:", altExactData);
-      console.log("DEBUG: Alternative equality search error:", altExactError);
+      console.log("%c [DB SEARCH] Alternative equality search results:", "background: #ff8c00; color: black; padding: 2px; border-radius: 4px;", altExactData);
+      if (altExactError) {
+        console.log("%c [DB SEARCH] Alternative equality search error:", "background: #ff8c00; color: black; padding: 2px; border-radius: 4px;", altExactError);
+      }
       
       if (altExactData && altExactData.length > 0) {
+        console.log("%c [DB SEARCH] Found videos with alternative exact tag match:", "background: #ff8c00; color: black; padding: 2px; border-radius: 4px;", altExactData);
         return {
           success: true,
           data: altExactData,
@@ -71,7 +104,7 @@ export async function searchVideosByKeyword(keyword: string): Promise<VideoSearc
         };
       }
     } else if (exactData && exactData.length > 0) {
-      console.log("Found videos with exact tag match:", exactData);
+      console.log("%c [DB SEARCH] Found videos with exact tag match:", "background: #ff8c00; color: black; padding: 2px; border-radius: 4px;", exactData);
       return {
         success: true,
         data: exactData,
@@ -84,16 +117,16 @@ export async function searchVideosByKeyword(keyword: string): Promise<VideoSearc
     }
     
     // Method 2: Try individual queries for each tag column
-    console.log("DEBUG: No exact matches, trying individual column queries");
+    console.log("%c [DB SEARCH] No exact matches, trying individual column queries", "background: #ff8c00; color: black; padding: 2px; border-radius: 4px;");
     
     // First with exact matches
     let tag1Result = await supabase.from('Videos').select('*').eq('video_tag1', trimmedKeyword);
     let tag2Result = await supabase.from('Videos').select('*').eq('video_tag2', trimmedKeyword);
     let tag3Result = await supabase.from('Videos').select('*').eq('video_tag3', trimmedKeyword);
     
-    console.log("DEBUG: Tag1 exact results:", tag1Result.data);
-    console.log("DEBUG: Tag2 exact results:", tag2Result.data);
-    console.log("DEBUG: Tag3 exact results:", tag3Result.data);
+    console.log("%c [DB SEARCH] Tag1 exact results:", "background: #ff8c00; color: black; padding: 2px; border-radius: 4px;", tag1Result.data);
+    console.log("%c [DB SEARCH] Tag2 exact results:", "background: #ff8c00; color: black; padding: 2px; border-radius: 4px;", tag2Result.data);
+    console.log("%c [DB SEARCH] Tag3 exact results:", "background: #ff8c00; color: black; padding: 2px; border-radius: 4px;", tag3Result.data);
     
     // Combine results
     let individualMatches = [
@@ -103,7 +136,7 @@ export async function searchVideosByKeyword(keyword: string): Promise<VideoSearc
     ];
     
     if (individualMatches.length > 0) {
-      console.log("Found videos with individual exact tag match:", individualMatches);
+      console.log("%c [DB SEARCH] Found videos with individual exact tag match:", "background: #ff8c00; color: black; padding: 2px; border-radius: 4px;", individualMatches);
       return {
         success: true,
         data: individualMatches,
@@ -117,7 +150,7 @@ export async function searchVideosByKeyword(keyword: string): Promise<VideoSearc
     
     return await tryPartialMatches(trimmedKeyword);
   } catch (error: any) {
-    console.error("Error in searchVideosByKeyword:", error);
+    console.error("%c [DB SEARCH] Error in searchVideosByKeyword:", "background: #ff8c00; color: black; padding: 2px; border-radius: 4px;", error);
     return {
       success: false,
       data: [],
@@ -134,16 +167,16 @@ export async function searchVideosByKeyword(keyword: string): Promise<VideoSearc
 // Extracted to a separate function to improve readability
 async function tryPartialMatches(trimmedKeyword: string): Promise<VideoSearchResult> {
   // Method 3: Try with case-insensitive search using ilike
-  console.log("DEBUG: No exact matches, trying ilike search");
+  console.log("%c [DB SEARCH] No exact matches, trying ilike search for: " + trimmedKeyword, "background: #fbae3c; color: black; padding: 2px; border-radius: 4px;");
   
   // Try with partial matches (contains)
   let tag1Result = await supabase.from('Videos').select('*').ilike('video_tag1', `%${trimmedKeyword}%`);
   let tag2Result = await supabase.from('Videos').select('*').ilike('video_tag2', `%${trimmedKeyword}%`);
   let tag3Result = await supabase.from('Videos').select('*').ilike('video_tag3', `%${trimmedKeyword}%`);
   
-  console.log("DEBUG: Tag1 ilike results:", tag1Result.data);
-  console.log("DEBUG: Tag2 ilike results:", tag2Result.data);
-  console.log("DEBUG: Tag3 ilike results:", tag3Result.data);
+  console.log("%c [DB SEARCH] Tag1 ilike results:", "background: #fbae3c; color: black; padding: 2px; border-radius: 4px;", tag1Result.data);
+  console.log("%c [DB SEARCH] Tag2 ilike results:", "background: #fbae3c; color: black; padding: 2px; border-radius: 4px;", tag2Result.data);
+  console.log("%c [DB SEARCH] Tag3 ilike results:", "background: #fbae3c; color: black; padding: 2px; border-radius: 4px;", tag3Result.data);
   
   // Combine results
   let ilikeMatches = [
@@ -153,7 +186,7 @@ async function tryPartialMatches(trimmedKeyword: string): Promise<VideoSearchRes
   ];
   
   if (ilikeMatches.length > 0) {
-    console.log("Found videos with ilike tag match:", ilikeMatches);
+    console.log("%c [DB SEARCH] Found videos with ilike tag match:", "background: #fbae3c; color: black; padding: 2px; border-radius: 4px;", ilikeMatches);
     return {
       success: true,
       data: ilikeMatches,
@@ -171,29 +204,43 @@ async function tryPartialMatches(trimmedKeyword: string): Promise<VideoSearchRes
 // Further extracted special cases logic for better organization
 async function trySpecialCasesMethods(trimmedKeyword: string): Promise<VideoSearchResult> {
   // Method 4: Special case for known keywords
-  if (trimmedKeyword.toLowerCase() === "catalog") {
-    console.log("DEBUG: Special case for 'catalog', doing direct table scan");
+  if (trimmedKeyword.toLowerCase() === "catalog" || trimmedKeyword.toLowerCase() === "business profile") {
+    console.log(`%c [DB SEARCH] Special case for '${trimmedKeyword}', doing direct table scan`, "background: #fbae3c; color: black; padding: 2px; border-radius: 4px;");
     
     const { data: catalogData, error: catalogError } = await supabase
       .from('Videos')
       .select('*');
     
     if (catalogData) {
-      // Filter manually for catalog
-      const catalogMatches = catalogData.filter(video => 
-        (video.video_tag1 && video.video_tag1.toLowerCase() === "catalog") ||
-        (video.video_tag2 && video.video_tag2.toLowerCase() === "catalog") ||
-        (video.video_tag3 && video.video_tag3.toLowerCase() === "catalog")
-      );
+      // Filter manually for special keywords - both normal and lowercase comparisons
+      const specialKeyword = trimmedKeyword.toLowerCase();
+      console.log("%c [DB SEARCH] Filtering table for special keyword: " + specialKeyword, "background: #fbae3c; color: black; padding: 2px; border-radius: 4px;");
       
-      console.log("DEBUG: Catalog direct scan results:", catalogMatches);
+      const specialMatches = catalogData.filter(video => {
+        // Show debug info for each video's tags
+        console.log(`%c [DB SEARCH] Video ${video.id} tags:`, "background: #fbae3c; color: black; padding: 2px; border-radius: 4px;", {
+          tag1: video.video_tag1, 
+          tag2: video.video_tag2, 
+          tag3: video.video_tag3,
+          // Check if any tags match our special keyword (case-insensitive)
+          tag1_match: video.video_tag1?.toLowerCase() === specialKeyword,
+          tag2_match: video.video_tag2?.toLowerCase() === specialKeyword,
+          tag3_match: video.video_tag3?.toLowerCase() === specialKeyword
+        });
+        
+        return (video.video_tag1 && video.video_tag1.toLowerCase() === specialKeyword) ||
+               (video.video_tag2 && video.video_tag2.toLowerCase() === specialKeyword) ||
+               (video.video_tag3 && video.video_tag3.toLowerCase() === specialKeyword);
+      });
       
-      if (catalogMatches.length > 0) {
+      console.log("%c [DB SEARCH] Special case direct scan results:", "background: #fbae3c; color: black; padding: 2px; border-radius: 4px;", specialMatches);
+      
+      if (specialMatches.length > 0) {
         return {
           success: true,
-          data: catalogMatches,
+          data: specialMatches,
           searchDetails: {
-            keywordUsed: "catalog",
+            keywordUsed: trimmedKeyword,
             matchType: 'exact',
             searchMethod: "special case direct scan"
           }
@@ -205,15 +252,15 @@ async function trySpecialCasesMethods(trimmedKeyword: string): Promise<VideoSear
   // Method 5: Try with lowercase keyword
   const lowercaseKeyword = trimmedKeyword.toLowerCase();
   if (lowercaseKeyword !== trimmedKeyword) {
-    console.log(`DEBUG: Trying again with lowercase keyword "${lowercaseKeyword}"`);
+    console.log(`%c [DB SEARCH] Trying again with lowercase keyword "${lowercaseKeyword}"`, "background: #fbae3c; color: black; padding: 2px; border-radius: 4px;");
     
     let tag1Result = await supabase.from('Videos').select('*').ilike('video_tag1', `%${lowercaseKeyword}%`);
     let tag2Result = await supabase.from('Videos').select('*').ilike('video_tag2', `%${lowercaseKeyword}%`);
     let tag3Result = await supabase.from('Videos').select('*').ilike('video_tag3', `%${lowercaseKeyword}%`);
     
-    console.log("DEBUG: Tag1 lowercase results:", tag1Result.data);
-    console.log("DEBUG: Tag2 lowercase results:", tag2Result.data);
-    console.log("DEBUG: Tag3 lowercase results:", tag3Result.data);
+    console.log("%c [DB SEARCH] Tag1 lowercase results:", "background: #fbae3c; color: black; padding: 2px; border-radius: 4px;", tag1Result.data);
+    console.log("%c [DB SEARCH] Tag2 lowercase results:", "background: #fbae3c; color: black; padding: 2px; border-radius: 4px;", tag2Result.data);
+    console.log("%c [DB SEARCH] Tag3 lowercase results:", "background: #fbae3c; color: black; padding: 2px; border-radius: 4px;", tag3Result.data);
     
     // Combine results
     let lowercaseMatches = [
@@ -223,7 +270,7 @@ async function trySpecialCasesMethods(trimmedKeyword: string): Promise<VideoSear
     ];
     
     if (lowercaseMatches.length > 0) {
-      console.log("Found videos with lowercase tag match:", lowercaseMatches);
+      console.log("%c [DB SEARCH] Found videos with lowercase tag match:", "background: #fbae3c; color: black; padding: 2px; border-radius: 4px;", lowercaseMatches);
       return {
         success: true,
         data: lowercaseMatches,
@@ -242,18 +289,21 @@ async function trySpecialCasesMethods(trimmedKeyword: string): Promise<VideoSear
 // Fallback method as the last resort
 async function tryFallbackMethod(trimmedKeyword: string): Promise<VideoSearchResult> {
   // Method 6: Last resort - direct debug fetch of all videos
-  if (trimmedKeyword.toLowerCase() === "catalog" || trimmedKeyword.toLowerCase() === "catalogue") {
-    console.log("DEBUG: Last resort - fetching all videos to find catalog");
-    
-    const { data: allVideos, error: allError } = await supabase
-      .from('Videos')
-      .select('*');
-    
-    console.log("DEBUG: All videos:", allVideos);
-    console.log("DEBUG: All videos error:", allError);
-    
+  console.log("%c [DB SEARCH] Last resort - fetching all videos to inspect", "background: #fbae3c; color: black; padding: 2px; border-radius: 4px;");
+  
+  const { data: allVideos, error: allError } = await supabase
+    .from('Videos')
+    .select('*');
+  
+  console.log("%c [DB SEARCH] All videos in database:", "background: #fbae3c; color: black; padding: 2px; border-radius: 4px;", allVideos);
+  if (allError) {
+    console.log("%c [DB SEARCH] Error fetching all videos:", "background: #fbae3c; color: black; padding: 2px; border-radius: 4px;", allError);
+  }
+  
+  if (trimmedKeyword.toLowerCase() === "catalog" || trimmedKeyword.toLowerCase() === "business profile" || trimmedKeyword.toLowerCase() === "catalogue") {
     if (allVideos && allVideos.length > 0) {
       // Just return the first video as a fallback
+      console.log("%c [DB SEARCH] Using emergency fallback for special keyword - returning first video", "background: #fbae3c; color: black; padding: 2px; border-radius: 4px;");
       return {
         success: true,
         data: [allVideos[0]],
@@ -267,7 +317,7 @@ async function tryFallbackMethod(trimmedKeyword: string): Promise<VideoSearchRes
   }
   
   // If no matches found after trying all approaches
-  console.log("No matches found for keyword:", trimmedKeyword);
+  console.log("%c [DB SEARCH] No matches found for keyword: " + trimmedKeyword, "background: #e63946; color: white; padding: 2px; border-radius: 4px;");
   return {
     success: false,
     data: [],

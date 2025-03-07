@@ -158,8 +158,8 @@ export function useConversationHistory() {
   
   const extractKeywords = (text: string): string[] => {
     const cleanText = text.replace(/[^\w\s]/g, '');
-    console.log("DEBUG: Original text for keyword extraction:", text);
-    console.log("DEBUG: Cleaned text for keyword extraction:", cleanText);
+    console.log("%c [KEYWORD LOG] Original text for keyword extraction: " + text, "background: #4361ee; color: white; padding: 2px; border-radius: 4px;");
+    console.log("%c [KEYWORD LOG] Cleaned text for keyword extraction: " + cleanText, "background: #4361ee; color: white; padding: 2px; border-radius: 4px;");
     
     const phrases = [
       "Quick Replies", 
@@ -171,17 +171,28 @@ export function useConversationHistory() {
       "Catalog"
     ];
     
+    console.log("%c [KEYWORD LOG] Phrases to check: ", "background: #4361ee; color: white; padding: 2px; border-radius: 4px;", phrases);
+    
+    // Log each phrase check individually for debugging
+    phrases.forEach(phrase => {
+      const lowerText = text.toLowerCase();
+      const lowerPhrase = phrase.toLowerCase();
+      console.log(`%c [KEYWORD LOG] Checking for "${phrase}"... Original: ${text.includes(phrase)}, Case-insensitive: ${lowerText.includes(lowerPhrase)}`, 
+        "background: #4361ee; color: white; padding: 2px; border-radius: 4px;");
+    });
+    
+    // Use case-insensitive search for phrases
     const foundPhrases = phrases.filter(phrase => 
       text.toLowerCase().includes(phrase.toLowerCase())
     );
     
     if (foundPhrases.length > 0) {
-      console.log("DEBUG: Found important phrases:", foundPhrases);
+      console.log("%c [KEYWORD LOG] Found important phrases: " + foundPhrases.join(", "), "background: #4cc9f0; color: black; padding: 2px; border-radius: 4px;");
       return foundPhrases;
     }
     
     const words = cleanText.split(/\s+/).filter(word => word.length > 3);
-    console.log("DEBUG: Extracted individual words:", words);
+    console.log("%c [KEYWORD LOG] Extracted individual words: " + words.join(", "), "background: #4361ee; color: white; padding: 2px; border-radius: 4px;");
     
     return [...new Set(words)];
   };
@@ -194,6 +205,12 @@ export function useConversationHistory() {
       details
     };
     
+    console.log("%c [ERROR LOG] Adding error: " + message, "background: #e63946; color: white; padding: 2px; border-radius: 4px;", {
+      keyword,
+      details,
+      timestamp: new Date(newError.timestamp).toLocaleString()
+    });
+    
     setErrorLogs(prev => [newError, ...prev].slice(0, 50));
     
     try {
@@ -204,14 +221,15 @@ export function useConversationHistory() {
   };
   
   const addMessage = async (text: string) => {
-    console.log("Processing new message:", text);
+    console.log("%c [MESSAGE LOG] Processing new message: " + text, "background: #3a0ca3; color: white; padding: 2px; border-radius: 4px;");
     const newMessage = { text, timestamp: Date.now() };
     setMessages(prev => [...prev, newMessage]);
     
     const keywords = extractKeywords(text);
+    console.log("%c [MESSAGE LOG] Extracted keywords: ", "background: #3a0ca3; color: white; padding: 2px; border-radius: 4px;", keywords);
     
     if (keywords.length === 0) {
-      console.log("No keywords found in message");
+      console.log("%c [MESSAGE LOG] No keywords found in message", "background: #3a0ca3; color: white; padding: 2px; border-radius: 4px;");
       addErrorLog(
         "No keywords extracted", 
         text.substring(0, 30), 
@@ -226,23 +244,42 @@ export function useConversationHistory() {
       return;
     }
     
-    console.log("Searching for videos with keywords:", keywords);
+    console.log("%c [SEARCH LOG] Searching for videos with keywords: " + keywords.join(", "), "background: #f72585; color: white; padding: 2px; border-radius: 4px;");
     
-    const highPriorityKeywords = ["Quick Replies", "Quick Reply", "Message Templates", "Templates", "WhatsApp Business"];
-    const priorityKeyword = keywords.find(kw => 
-      highPriorityKeywords.some(priority => 
-        priority.toLowerCase() === kw.toLowerCase()
-      )
-    );
+    const highPriorityKeywords = ["Quick Replies", "Quick Reply", "Message Templates", "Templates", "WhatsApp Business", "Business Profile"];
+    console.log("%c [SEARCH LOG] High priority keywords: " + highPriorityKeywords.join(", "), "background: #f72585; color: white; padding: 2px; border-radius: 4px;");
+    
+    // Check each keyword against high priority list with detailed logging
+    let priorityKeyword = null;
+    for (const kw of keywords) {
+      for (const priority of highPriorityKeywords) {
+        const match = priority.toLowerCase() === kw.toLowerCase();
+        console.log(`%c [SEARCH LOG] Checking if "${kw}" matches priority "${priority}": ${match}`, 
+          "background: #f72585; color: white; padding: 2px; border-radius: 4px;");
+        if (match) {
+          priorityKeyword = kw;
+          break;
+        }
+      }
+      if (priorityKeyword) break;
+    }
     
     if (priorityKeyword) {
-      console.log("Found high priority keyword:", priorityKeyword);
+      console.log("%c [SEARCH LOG] Found high priority keyword: " + priorityKeyword, "background: #b5179e; color: white; padding: 2px; border-radius: 4px;");
       const searchResult = await searchVideosByKeyword(priorityKeyword);
+      
+      console.log("%c [SEARCH LOG] Priority keyword search result: ", "background: #b5179e; color: white; padding: 2px; border-radius: 4px;", {
+        success: searchResult.success,
+        dataLength: searchResult.data?.length || 0,
+        errorReason: searchResult.errorReason,
+        searchDetails: searchResult.searchDetails
+      });
       
       if (searchResult.success && searchResult.data && searchResult.data.length > 0) {
         const matchedVideos = searchResult.data.map(video => ({ ...video, keyword: priorityKeyword }));
+        console.log("%c [SEARCH LOG] Matched videos for priority keyword: ", "background: #b5179e; color: white; padding: 2px; border-radius: 4px;", matchedVideos);
         setMatchedVideos(matchedVideos);
-        console.log("Setting current video to high priority match:", matchedVideos[0]);
+        console.log("%c [SEARCH LOG] Setting current video to high priority match: ", "background: #b5179e; color: white; padding: 2px; border-radius: 4px;", matchedVideos[0]);
         setCurrentVideo(matchedVideos[0]);
         
         toast({
@@ -252,6 +289,7 @@ export function useConversationHistory() {
         });
         return;
       } else {
+        console.log("%c [SEARCH LOG] No videos found for priority keyword: " + priorityKeyword, "background: #e63946; color: white; padding: 2px; border-radius: 4px;", searchResult);
         addErrorLog(
           `No video found for priority keyword: ${priorityKeyword}`, 
           priorityKeyword, 
@@ -263,14 +301,26 @@ export function useConversationHistory() {
     let foundAnyVideos = false;
     let searchErrors: {keyword: string, reason: string}[] = [];
     
+    console.log("%c [SEARCH LOG] Trying all keywords: " + keywords.join(", "), "background: #f72585; color: white; padding: 2px; border-radius: 4px;");
+    
     for (const keyword of keywords) {
+      console.log("%c [SEARCH LOG] Searching with keyword: " + keyword, "background: #f72585; color: white; padding: 2px; border-radius: 4px;");
       const searchResult = await searchVideosByKeyword(keyword);
+      
+      console.log("%c [SEARCH LOG] Search result for keyword '" + keyword + "': ", "background: #f72585; color: white; padding: 2px; border-radius: 4px;", {
+        success: searchResult.success,
+        dataLength: searchResult.data?.length || 0,
+        errorReason: searchResult.errorReason,
+        searchDetails: searchResult.searchDetails,
+        rawData: searchResult.data
+      });
       
       if (searchResult.success && searchResult.data && searchResult.data.length > 0) {
         foundAnyVideos = true;
         const matchedVideos = searchResult.data.map(video => ({ ...video, keyword }));
+        console.log("%c [SEARCH LOG] Matched videos for keyword '" + keyword + "': ", "background: #f72585; color: white; padding: 2px; border-radius: 4px;", matchedVideos);
         setMatchedVideos(matchedVideos);
-        console.log("Setting current video to:", matchedVideos[0]);
+        console.log("%c [SEARCH LOG] Setting current video to: ", "background: #f72585; color: white; padding: 2px; border-radius: 4px;", matchedVideos[0]);
         setCurrentVideo(matchedVideos[0]);
         
         toast({
@@ -280,6 +330,7 @@ export function useConversationHistory() {
         });
         break;
       } else {
+        console.log("%c [SEARCH LOG] No videos found for keyword '" + keyword + "': ", "background: #e63946; color: white; padding: 2px; border-radius: 4px;", searchResult.errorReason || "Unknown reason");
         searchErrors.push({
           keyword,
           reason: searchResult.errorReason || "Unknown reason"
@@ -288,7 +339,7 @@ export function useConversationHistory() {
     }
     
     if (!foundAnyVideos) {
-      console.log("No matching videos found for keywords:", keywords);
+      console.log("%c [SEARCH LOG] No matching videos found for any keywords: " + keywords.join(", "), "background: #e63946; color: white; padding: 2px; border-radius: 4px;");
       
       searchErrors.forEach(err => {
         addErrorLog(
