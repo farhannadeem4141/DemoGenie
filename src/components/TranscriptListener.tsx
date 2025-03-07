@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { useConversationHistory } from '@/hooks/useConversationHistory';
 import VideoPlayer from './VideoPlayer';
@@ -26,11 +25,9 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
   const [recordingStatus, setRecordingStatus] = useState(isRecording);
   const { toast } = useToast();
 
-  // Make video visible after a short delay to create a nice animation
   useEffect(() => {
     if (currentVideo) {
       console.log("Video available, preparing to show:", currentVideo);
-      // Small delay for animation purposes
       const timer = setTimeout(() => {
         setIsVideoVisible(true);
       }, 300);
@@ -40,13 +37,11 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
     }
   }, [currentVideo]);
 
-  // Update recording status from props
   useEffect(() => {
     console.log("Recording status prop changed:", isRecording);
     setRecordingStatus(isRecording);
   }, [isRecording]);
 
-  // Listen for recording activation through global method
   useEffect(() => {
     const checkForActivationButtons = () => {
       if (window.activateRecording) {
@@ -56,21 +51,41 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
       }
     };
     
-    // Check shortly after component mounts
     setTimeout(checkForActivationButtons, 1000);
     
-    // Set up a click event listener for green buttons that might be the AI Assistant button
+    const buttonStateInterval = setInterval(() => {
+      const vapiButton = document.querySelector('[id^="vapi-support-btn"]');
+      if (vapiButton) {
+        if (vapiButton instanceof HTMLElement) {
+          const isVisible = 
+            vapiButton.style.display !== 'none' && 
+            vapiButton.style.visibility !== 'hidden' &&
+            !vapiButton.classList.contains('inactive') &&
+            vapiButton.getAttribute('aria-hidden') !== 'true';
+          
+          console.log("Vapi button visibility check:", isVisible);
+          
+          if (!isVisible && recordingStatus) {
+            console.log("Vapi button is hidden but recording still active - deactivating");
+            setRecordingStatus(false);
+            
+            window.dispatchEvent(new CustomEvent('recording_status_change', {
+              detail: { isActive: false }
+            }));
+          }
+        }
+      }
+    }, 3000);
+    
     const handlePossibleAssistantButtonClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
       
-      // Look for elements with green background that might be the AI Assistant button
       if (target && 
           (target.style.backgroundColor === 'rgb(37, 211, 102)' || 
            target.getAttribute('style')?.includes('rgb(37, 211, 102)') ||
            target.textContent?.includes('AI Assistant'))) {
         console.log("Possible AI Assistant button clicked");
         
-        // Extra check for localStorage readiness
         try {
           if (!localStorage.getItem('voice_input_history')) {
             localStorage.setItem('voice_input_history', JSON.stringify([]));
@@ -86,20 +101,17 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
     
     return () => {
       document.removeEventListener('click', handlePossibleAssistantButtonClick);
+      clearInterval(buttonStateInterval);
     };
-  }, []);
+  }, [recordingStatus]);
 
-  // Listen for messages from the AI assistant via window event
   useEffect(() => {
-    // This function will capture the AI messages
     const captureAiMessages = (event: any) => {
       if (event.detail && event.detail.type === 'ai_message' && event.detail.text) {
         console.log("Received AI message:", event.detail.text);
         
-        // Process the message to find matching videos
         addMessage(event.detail.text);
         
-        // Show toast notification
         toast({
           title: "Message Received",
           description: "Processing message to find relevant videos...",
@@ -108,17 +120,14 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
       }
     };
 
-    // Set up another event listener specifically for voice input
     const captureVoiceInput = async (event: any) => {
       if (event.detail && event.detail.type === 'voice_input' && event.detail.text) {
-        // Save to voice input history for debugging
         const newVoiceInput = {
           text: event.detail.text,
           timestamp: Date.now()
         };
         setVoiceInputHistory(prev => [newVoiceInput, ...prev].slice(0, 20));
         
-        // Save to localStorage for persistence
         try {
           const savedInputs = JSON.parse(localStorage.getItem('voice_input_history') || '[]');
           localStorage.setItem('voice_input_history', JSON.stringify([newVoiceInput, ...savedInputs].slice(0, 50)));
@@ -126,19 +135,16 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
           console.error('Error saving voice input to localStorage:', e);
         }
         
-        // Enhanced logging for voice input debugging
         console.log("%c [VOICE LOG] ========== NEW VOICE INPUT ==========", "background: #2a9d8f; color: white; padding: 4px; border-radius: 4px; font-weight: bold;");
         console.log("%c [VOICE LOG] Raw voice input: " + event.detail.text, "background: #2a9d8f; color: white; padding: 2px; border-radius: 4px;");
         console.log("%c [VOICE LOG] Timestamp: " + new Date().toISOString(), "background: #2a9d8f; color: white; padding: 2px; border-radius: 4px;");
         console.log("%c [VOICE LOG] Input length: " + event.detail.text.length + " characters", "background: #2a9d8f; color: white; padding: 2px; border-radius: 4px;");
         
-        // Log for case sensitivity debugging
         const inputText = event.detail.text;
         console.log("%c [VOICE LOG] Original case: " + inputText, "background: #2a9d8f; color: white; padding: 2px; border-radius: 4px;");
         console.log("%c [VOICE LOG] Lowercase: " + inputText.toLowerCase(), "background: #2a9d8f; color: white; padding: 2px; border-radius: 4px;");
         console.log("%c [VOICE LOG] Uppercase: " + inputText.toUpperCase(), "background: #2a9d8f; color: white; padding: 2px; border-radius: 4px;");
         
-        // Check specific keyword matches
         const specificKeywords = ["Business Profile", "business profile", "BUSINESS PROFILE", "Business profile"];
         specificKeywords.forEach(keyword => {
           console.log(`%c [VOICE LOG] Contains "${keyword}"? ${inputText.includes(keyword)}`, 
@@ -147,12 +153,6 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
             "background: #2a9d8f; color: white; padding: 2px; border-radius: 4px;");
         });
         
-        // Word by word analysis
-        const words = inputText.split(/\s+/);
-        console.log("%c [VOICE LOG] Words in input: " + words.join(', '), 
-          "background: #2a9d8f; color: white; padding: 2px; border-radius: 4px;");
-        
-        // Special handling for catalog keyword
         if (inputText.toLowerCase().includes('catalog')) {
           console.log("%c [VOICE LOG] Catalog keyword detected, using specialized catalog query", "background: #e76f51; color: white; padding: 2px; border-radius: 4px;");
           try {
@@ -180,10 +180,8 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
           }
         }
         
-        // Process the voice input to find matching videos
         addMessage(event.detail.text);
         
-        // Show toast notification
         toast({
           title: "Voice Input Received",
           description: `Processing: "${event.detail.text.substring(0, 30)}${event.detail.text.length > 30 ? '...' : ''}"`,
@@ -192,14 +190,12 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
       }
     };
 
-    // Listen for recording status changes
     const handleRecordingStatusChange = (event: any) => {
       if (event.detail && typeof event.detail.isActive === 'boolean') {
         console.log("%c [RECORDING] Status changed to: " + (event.detail.isActive ? "ACTIVE" : "INACTIVE"), 
           "background: #e63946; color: white; padding: 2px; border-radius: 4px;");
         setRecordingStatus(event.detail.isActive);
         
-        // Initialize localStorage storage for voice inputs if it doesn't exist
         if (event.detail.isActive) {
           try {
             if (!localStorage.getItem('voice_input_history')) {
@@ -221,7 +217,6 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
       }
     };
 
-    // Setup event listeners
     window.addEventListener('vapi_message', captureAiMessages);
     window.addEventListener('voice_input', captureVoiceInput);
     window.addEventListener('recording_status_change', handleRecordingStatusChange);
@@ -235,7 +230,6 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
     };
   }, [addMessage, toast, setCurrentVideo]);
 
-  // Load voice input history from localStorage on component mount
   useEffect(() => {
     try {
       const savedInputs = JSON.parse(localStorage.getItem('voice_input_history') || '[]');
@@ -243,18 +237,15 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
         console.log("Loaded voice input history from localStorage:", savedInputs);
       } else {
         console.log("No voice input history found in localStorage");
-        // Initialize empty array if not present
         localStorage.setItem('voice_input_history', JSON.stringify([]));
       }
       setVoiceInputHistory(savedInputs);
     } catch (e) {
       console.error('Error loading voice input history from localStorage:', e);
-      // Initialize an empty array in case of error
       localStorage.setItem('voice_input_history', JSON.stringify([]));
     }
   }, []);
 
-  // Handle video error
   const handleVideoError = () => {
     toast({
       variant: "destructive",
@@ -264,10 +255,8 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
     });
   };
 
-  // Handle video close
   const handleVideoClose = () => {
     setIsVideoVisible(false);
-    // Give time for the animation to finish before removing the video
     setTimeout(() => {
       setCurrentVideo(null);
     }, 300);
@@ -279,13 +268,11 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
     });
   };
 
-  // Format timestamp for human readability
   const formatTimestamp = (timestamp: number) => {
     const date = new Date(timestamp);
     return `${date.toLocaleDateString()} ${date.toLocaleTimeString()}`;
   };
 
-  // Simulate voice input for testing purposes
   const simulateVoiceInput = (text: string) => {
     console.log("%c [VOICE LOG] Simulating voice input: " + text, "background: #2a9d8f; color: white; padding: 2px; border-radius: 4px;");
     window.dispatchEvent(new CustomEvent('voice_input', {
@@ -296,19 +283,16 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
     }));
   };
 
-  // Add test buttons for different inputs
   const testCatalogKeyword = () => {
     console.log("%c [VOICE LOG] Testing catalog keyword specifically", "background: #e76f51; color: white; padding: 2px; border-radius: 4px;");
     simulateVoiceInput("catalog");
   };
-  
-  // Add a test specifically for Business Profile
+
   const testBusinessProfile = () => {
     console.log("%c [VOICE LOG] Testing 'Business Profile' keyword specifically", "background: #f4a261; color: white; padding: 2px; border-radius: 4px;");
     simulateVoiceInput("Business Profile");
   };
 
-  // Clear voice input history
   const clearVoiceInputHistory = () => {
     setVoiceInputHistory([]);
     localStorage.removeItem('voice_input_history');
@@ -320,7 +304,6 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
     });
   };
 
-  // Manual test of recording status event
   const testRecordingStatusEvent = (isActive: boolean) => {
     console.log(`Testing recording status event: ${isActive ? 'ACTIVE' : 'INACTIVE'}`);
     window.dispatchEvent(new CustomEvent('recording_status_change', {
@@ -328,7 +311,6 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
     }));
   };
 
-  // Debug Vapi connection
   const debugVapiConnection = () => {
     console.log("Debugging Vapi connection...");
     try {
@@ -340,7 +322,6 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
           duration: 3000,
         });
         
-        // If window.activateRecording exists, try calling it
         if (window.activateRecording) {
           console.log("Found global activateRecording function, calling it");
           window.activateRecording();
@@ -361,14 +342,12 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
 
   return (
     <div className={cn("fixed right-4 bottom-24 w-80 z-50 transition-all", className)}>
-      {/* Recording Status Indicator */}
       {recordingStatus && (
         <div className="mb-3 flex items-center justify-center bg-red-500 text-white p-2 rounded-lg shadow-lg animate-pulse">
           <Mic className="mr-2" size={16} /> Recording Active
         </div>
       )}
 
-      {/* Voice Input History Panel */}
       <div className="mb-3">
         <button 
           onClick={() => setShowErrorLog(!showErrorLog)}
@@ -412,7 +391,6 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
         )}
       </div>
 
-      {/* Debug Panel */}
       <div className="mb-3">
         <button 
           onClick={() => setShowDebugPanel(!showDebugPanel)}
@@ -479,7 +457,6 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
         )}
       </div>
 
-      {/* Test buttons for simulating voice input */}
       <div className="mb-3 flex justify-end gap-2">
         <button 
           onClick={() => simulateVoiceInput("Tell me about the catalog feature")}
@@ -542,7 +519,6 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
         </button>
       </div>
 
-      {/* Error log panel */}
       {showErrorLog && errorLogs.length > 0 && (
         <div className="mb-4 bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden max-h-96 flex flex-col border border-red-200 dark:border-red-900">
           <div className="bg-red-500 text-white p-3 flex justify-between items-center">
@@ -579,7 +555,6 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
         </div>
       )}
 
-      {/* Video player */}
       {currentVideo && currentVideo.video_url && (
         <div className={cn(
           "mb-4 transform transition-all duration-300 ease-in-out shadow-lg rounded-lg overflow-hidden",

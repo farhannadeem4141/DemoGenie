@@ -71,6 +71,21 @@ const Index = () => {
     }
   };
 
+  const deactivateRecording = () => {
+    addDebugLog("Manual recording deactivation triggered");
+    setIsRecordingActive(false);
+    
+    window.dispatchEvent(new CustomEvent('recording_status_change', {
+      detail: { isActive: false }
+    }));
+    
+    toast({
+      title: "Recording Stopped",
+      description: "Voice recording is now inactive",
+      duration: 3000,
+    });
+  };
+
   useEffect(() => {
     window.activateRecording = activateRecording;
   }, []);
@@ -103,6 +118,23 @@ const Index = () => {
     script.defer = true;
     script.async = true;
     document.body.appendChild(script);
+
+    const vapiButtonStateInterval = setInterval(() => {
+      const vapiSupportBtn = document.querySelector('[id^="vapi-support-btn"]');
+      if (vapiSupportBtn) {
+        if (vapiSupportBtn instanceof HTMLElement) {
+          const isHidden = vapiSupportBtn.style.display === 'none' || 
+                          vapiSupportBtn.style.visibility === 'hidden' || 
+                          vapiSupportBtn.classList.contains('inactive') ||
+                          vapiSupportBtn.getAttribute('aria-hidden') === 'true';
+          
+          if (isHidden && isRecordingActive) {
+            addDebugLog("Vapi button detected as inactive, deactivating recording");
+            deactivateRecording();
+          }
+        }
+      }
+    }, 2000);
 
     script.onload = function () {
       addDebugLog("Vapi script loaded");
@@ -194,7 +226,7 @@ const Index = () => {
                 description: "Voice recording is now active",
                 duration: 3000,
               });
-            } else if (state.status === 'disconnected' || state.status === 'error') {
+            } else if (state.status === 'disconnected' || state.status === 'error' || state.status === 'inactive') {
               setIsRecordingActive(false);
               console.log("Voice recording deactivated");
               addDebugLog(`Recording DEACTIVATED (status: ${state.status})`);
@@ -227,6 +259,19 @@ const Index = () => {
                 addDebugLog(`Error connecting vapiInstance: ${e}`);
               }
             }
+          }
+        }, true);
+
+        document.addEventListener('click', (e) => {
+          const target = e.target as HTMLElement;
+          
+          if (target && 
+              (target.classList.contains('vapi-close-btn') || 
+               target.classList.contains('vapi-overlay') ||
+               target.getAttribute('aria-label') === 'Close' ||
+               target.closest('[aria-label="Close"]'))) {
+            addDebugLog("Vapi UI close action detected!");
+            deactivateRecording();
           }
         }, true);
 
@@ -368,6 +413,7 @@ const Index = () => {
     };
 
     return () => {
+      clearInterval(vapiButtonStateInterval);
       if (vapiInstanceRef.current && vapiInstanceRef.current.destroy) {
         vapiInstanceRef.current.destroy();
       }
@@ -375,7 +421,7 @@ const Index = () => {
         document.body.removeChild(script);
       }
     };
-  }, [toast]);
+  }, [toast, isRecordingActive]);
 
   return (
     <div className="min-h-screen overflow-hidden">
