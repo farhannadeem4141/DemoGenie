@@ -41,6 +41,39 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
   }, [isRecording]);
 
   useEffect(() => {
+    // Check for any existing voice inputs in localStorage immediately on mount
+    const checkForExistingInputs = () => {
+      try {
+        const voiceInputs = localStorage.getItem('voice_input_history');
+        if (voiceInputs) {
+          const parsedInputs = JSON.parse(voiceInputs);
+          console.log("Found existing voice inputs:", parsedInputs.length);
+          
+          if (Array.isArray(parsedInputs) && parsedInputs.length > 0) {
+            // Process voice inputs that may not have been added to conversation history
+            parsedInputs.forEach(input => {
+              if (input && input.text) {
+                console.log("Processing existing voice input:", input.text);
+                // We'll let useConversationHistory handle duplicate filtering
+                addMessage({
+                  text: input.text,
+                  isAiMessage: false,
+                  timestamp: input.timestamp || Date.now()
+                });
+              }
+            });
+          }
+        } else {
+          console.log("No existing voice inputs found in localStorage");
+        }
+      } catch (error) {
+        console.error("Error processing existing voice inputs:", error);
+      }
+    };
+    
+    checkForExistingInputs();
+    
+    // Continue with regular event listeners
     const checkForActivationButtons = () => {
       if (window.activateRecording) {
         console.log("Found global activateRecording function");
@@ -78,44 +111,14 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
     return () => {
       clearInterval(buttonStateInterval);
     };
-  }, [recordingStatus]);
+  }, [recordingStatus, addMessage]);
 
   useEffect(() => {
-    // Load any existing voice inputs from localStorage on component mount
-    const loadExistingVoiceInputs = () => {
-      try {
-        const storedInputs = localStorage.getItem('voice_input_history');
-        if (storedInputs) {
-          const inputs = JSON.parse(storedInputs);
-          if (Array.isArray(inputs) && inputs.length > 0) {
-            console.log("Found existing voice inputs in localStorage, processing...");
-            
-            // Add each voice input to the conversation history
-            inputs.forEach(input => {
-              if (input && input.text) {
-                console.log("Adding voice input from storage:", input.text.substring(0, 50) + "...");
-                addMessage({
-                  text: input.text,
-                  isAiMessage: false,
-                  timestamp: input.timestamp || Date.now()
-                });
-              }
-            });
-          }
-        }
-      } catch (error) {
-        console.error("Error loading voice inputs from localStorage:", error);
-      }
-    };
-    
-    // Call this immediately to load existing inputs
-    loadExistingVoiceInputs();
-    
     const captureAiMessages = (event: any) => {
       if (event.detail && event.detail.type === 'ai_message' && event.detail.text) {
         console.log("Received AI message:", event.detail.text);
         
-        // Always add AI messages to conversation history
+        // Add AI messages to conversation history
         addMessage({
           text: event.detail.text,
           isAiMessage: true,
@@ -135,14 +138,14 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
         const inputText = event.detail.text;
         console.log("Voice input captured:", inputText);
         
-        // Always add user voice input to conversation history
+        // Add user voice input to conversation history
         addMessage({
           text: inputText,
           isAiMessage: false,
           timestamp: Date.now()
         });
         
-        // Save the voice input to localStorage directly here as well
+        // Ensure voice input is saved to localStorage
         try {
           const savedInputs = JSON.parse(localStorage.getItem('voice_input_history') || '[]');
           const newInput = {

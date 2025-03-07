@@ -28,4 +28,11 @@ export interface VoiceInput {
   transcript?: string;
   isFinal?: boolean;
   confidence?: number;
+  timestamp?: number;
+}
+
+export interface TranscriptItem {
+  text: string;
+  isUser: boolean;
+  timestamp: number;
 }

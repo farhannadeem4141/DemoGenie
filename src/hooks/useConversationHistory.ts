@@ -32,49 +32,72 @@ export function useConversationHistory() {
   const { toast } = useToast();
   
   useEffect(() => {
-    const savedHistory = localStorage.getItem('conversation_history');
-    if (savedHistory) {
-      try {
-        const parsedMessages = JSON.parse(savedHistory);
-        console.log("Loaded conversation history from localStorage:", parsedMessages.length, "messages");
-        setMessages(parsedMessages);
-      } catch (e) {
-        console.error('Failed to parse conversation history:', e);
+    const loadConversationHistory = () => {
+      const savedHistory = localStorage.getItem('conversation_history');
+      if (savedHistory) {
+        try {
+          const parsedMessages = JSON.parse(savedHistory);
+          console.log("Loaded conversation history from localStorage:", parsedMessages.length, "messages");
+          
+          if (Array.isArray(parsedMessages) && parsedMessages.length > 0) {
+            setMessages(parsedMessages);
+          }
+        } catch (e) {
+          console.error('Failed to parse conversation history:', e);
+        }
       }
-    }
+    };
     
-    const voiceInputs = localStorage.getItem('voice_input_history');
-    if (voiceInputs) {
-      try {
-        const parsedInputs = JSON.parse(voiceInputs);
-        console.log("Found voice inputs in localStorage:", parsedInputs.length);
-        
-        if (Array.isArray(parsedInputs) && parsedInputs.length > 0) {
-          const existingTexts = new Set(messages.map(m => m.text));
+    const loadVoiceInputs = () => {
+      const voiceInputs = localStorage.getItem('voice_input_history');
+      if (voiceInputs) {
+        try {
+          const parsedInputs = JSON.parse(voiceInputs);
+          console.log("Found voice inputs in localStorage:", parsedInputs.length);
           
-          const newInputs = parsedInputs
-            .filter(input => input && input.text && !existingTexts.has(input.text))
-            .map(input => ({
-              text: input.text,
-              isAiMessage: false,
-              timestamp: input.timestamp || Date.now()
-            }));
-          
-          if (newInputs.length > 0) {
-            console.log("Adding", newInputs.length, "voice inputs to conversation history");
+          if (Array.isArray(parsedInputs) && parsedInputs.length > 0) {
             setMessages(prevMessages => {
-              const updatedMessages = [...prevMessages, ...newInputs];
-              try {
-                localStorage.setItem('conversation_history', JSON.stringify(updatedMessages));
-              } catch (e) {
-                console.error('Failed to save conversation history:', e);
+              const existingTexts = new Set(prevMessages.map(m => m.text));
+              
+              const newInputs = parsedInputs
+                .filter(input => input && input.text && !existingTexts.has(input.text))
+                .map(input => ({
+                  text: input.text,
+                  isAiMessage: false,
+                  timestamp: input.timestamp || Date.now()
+                }));
+              
+              if (newInputs.length > 0) {
+                console.log("Adding", newInputs.length, "voice inputs to conversation history");
+                const updatedMessages = [...prevMessages, ...newInputs];
+                
+                try {
+                  localStorage.setItem('conversation_history', JSON.stringify(updatedMessages));
+                } catch (e) {
+                  console.error('Failed to save conversation history:', e);
+                }
+                
+                return updatedMessages;
               }
-              return updatedMessages;
+              
+              return prevMessages;
             });
           }
+        } catch (e) {
+          console.error('Failed to parse voice inputs from localStorage:', e);
         }
+      }
+    };
+    
+    loadConversationHistory();
+    loadVoiceInputs();
+    
+    const savedErrorLogs = localStorage.getItem('video_search_errors');
+    if (savedErrorLogs) {
+      try {
+        setErrorLogs(JSON.parse(savedErrorLogs));
       } catch (e) {
-        console.error('Failed to parse voice inputs from localStorage:', e);
+        console.error('Failed to parse error logs from localStorage:', e);
       }
     }
   }, []);
