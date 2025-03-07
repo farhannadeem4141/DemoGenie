@@ -6,6 +6,8 @@ import { useToast } from '@/hooks/use-toast';
 interface Message {
   text: string;
   timestamp: number;
+  isAiMessage?: boolean;
+  isSystem?: boolean;
 }
 
 interface VideoMatch {
@@ -33,7 +35,9 @@ export function useConversationHistory() {
     const savedHistory = localStorage.getItem('conversation_history');
     if (savedHistory) {
       try {
-        setMessages(JSON.parse(savedHistory));
+        const parsedMessages = JSON.parse(savedHistory);
+        console.log("Loaded conversation history from localStorage:", parsedMessages.length, "messages");
+        setMessages(parsedMessages);
       } catch (e) {
         console.error('Failed to parse conversation history:', e);
       }
@@ -43,6 +47,7 @@ export function useConversationHistory() {
   useEffect(() => {
     if (messages.length > 0) {
       localStorage.setItem('conversation_history', JSON.stringify(messages));
+      console.log("Saved conversation history to localStorage:", messages.length, "messages");
     }
   }, [messages]);
 
@@ -223,20 +228,51 @@ export function useConversationHistory() {
     }
   };
   
-  const addMessage = async (text: string) => {
+  const addMessage = async (message: Message | string) => {
     console.log("%c [MESSAGE LOG] ========== NEW MESSAGE PROCESSING ==========", "background: #3a0ca3; color: white; padding: 4px; border-radius: 4px; font-weight: bold;");
-    console.log("%c [MESSAGE LOG] Processing new message: " + text, "background: #3a0ca3; color: white; padding: 2px; border-radius: 4px;");
-    const newMessage = { text, timestamp: Date.now() };
-    setMessages(prev => [...prev, newMessage]);
     
-    const keywords = extractKeywords(text);
+    const newMessage: Message = typeof message === 'string' 
+      ? { text: message, timestamp: Date.now() }
+      : message;
+    
+    console.log("%c [MESSAGE LOG] Processing new message:", "background: #3a0ca3; color: white; padding: 2px; border-radius: 4px;", newMessage);
+    
+    setMessages(prevMessages => {
+      const isDuplicate = prevMessages.some(m => 
+        m.text === newMessage.text && 
+        Math.abs(m.timestamp - newMessage.timestamp) < 1000
+      );
+      
+      if (isDuplicate) {
+        console.log("%c [MESSAGE LOG] Duplicate message detected, skipping", "background: #3a0ca3; color: white; padding: 2px; border-radius: 4px;");
+        return prevMessages;
+      }
+      
+      const updatedMessages = [...prevMessages, newMessage];
+      console.log("%c [MESSAGE LOG] Updated message count:", "background: #3a0ca3; color: white; padding: 2px; border-radius: 4px;", updatedMessages.length);
+      
+      try {
+        localStorage.setItem('conversation_history', JSON.stringify(updatedMessages));
+      } catch (e) {
+        console.error('Failed to save conversation history:', e);
+      }
+      
+      return updatedMessages;
+    });
+    
+    if (typeof message !== 'string' && (message.isSystem || message.isAiMessage)) {
+      return;
+    }
+    
+    const messageText = typeof message === 'string' ? message : message.text;
+    const keywords = extractKeywords(messageText);
     console.log("%c [MESSAGE LOG] Extracted keywords: ", "background: #3a0ca3; color: white; padding: 2px; border-radius: 4px;", keywords);
     
     if (keywords.length === 0) {
       console.log("%c [MESSAGE LOG] No keywords found in message", "background: #3a0ca3; color: white; padding: 2px; border-radius: 4px;");
       addErrorLog(
         "No keywords extracted", 
-        text.substring(0, 30), 
+        messageText.substring(0, 30), 
         "Message doesn't contain any extractable keywords"
       );
       
@@ -383,6 +419,7 @@ export function useConversationHistory() {
   const clearHistory = () => {
     setMessages([]);
     localStorage.removeItem('conversation_history');
+    console.log("Conversation history cleared");
   };
   
   const clearErrorLogs = () => {

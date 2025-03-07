@@ -85,7 +85,12 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
       if (event.detail && event.detail.type === 'ai_message' && event.detail.text) {
         console.log("Received AI message:", event.detail.text);
         
-        addMessage(event.detail.text);
+        // Always add AI messages to conversation history
+        addMessage({
+          text: event.detail.text,
+          isAiMessage: true,
+          timestamp: Date.now()
+        });
         
         toast({
           title: "Message Received",
@@ -98,6 +103,13 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
     const captureVoiceInput = async (event: any) => {
       if (event.detail && event.detail.type === 'voice_input' && event.detail.text) {
         const inputText = event.detail.text;
+        
+        // Always add user voice input to conversation history
+        addMessage({
+          text: inputText,
+          isAiMessage: false,
+          timestamp: Date.now()
+        });
         
         if (inputText.toLowerCase().includes('catalog')) {
           console.log("Catalog keyword detected, using specialized catalog query");
@@ -126,8 +138,6 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
           }
         }
         
-        addMessage(event.detail.text);
-        
         toast({
           title: "Voice Input Received",
           description: `Processing: "${event.detail.text.substring(0, 30)}${event.detail.text.length > 30 ? '...' : ''}"`,
@@ -141,6 +151,21 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
         console.log("Recording status changed to: " + (event.detail.isActive ? "ACTIVE" : "INACTIVE"));
         setRecordingStatus(event.detail.isActive);
         
+        // Log recording status changes to conversation history
+        if (event.detail.isActive) {
+          addMessage({
+            text: "Recording started",
+            isSystem: true,
+            timestamp: Date.now()
+          });
+        } else {
+          addMessage({
+            text: "Recording stopped",
+            isSystem: true,
+            timestamp: Date.now()
+          });
+        }
+        
         toast({
           title: event.detail.isActive ? "Recording Started" : "Recording Stopped",
           description: event.detail.isActive 
@@ -150,6 +175,35 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
         });
       }
     };
+    
+    // Check for any existing messages in localStorage on initial load
+    const loadExistingMessages = () => {
+      const existingVoiceInputs = localStorage.getItem('voice_input_history');
+      if (existingVoiceInputs) {
+        try {
+          const inputs = JSON.parse(existingVoiceInputs);
+          if (Array.isArray(inputs) && inputs.length > 0) {
+            console.log("Found existing voice inputs in localStorage:", inputs.length);
+            
+            // Add them to conversation if not already present
+            inputs.forEach(input => {
+              if (input.text) {
+                addMessage({
+                  text: input.text,
+                  isAiMessage: false,
+                  timestamp: input.timestamp || Date.now()
+                });
+              }
+            });
+          }
+        } catch (error) {
+          console.error("Error parsing voice inputs from localStorage:", error);
+        }
+      }
+    };
+    
+    // Load existing messages when component mounts
+    loadExistingMessages();
 
     window.addEventListener('vapi_message', captureAiMessages);
     window.addEventListener('voice_input', captureVoiceInput);
@@ -212,9 +266,24 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
             </div>
           ) : (
             messages.map((message, index) => (
-              <div key={index} className="border-b border-gray-200 dark:border-gray-700 pb-2 text-sm">
-                <div className="font-medium text-gray-800 dark:text-gray-200 break-words">{message.text}</div>
-                <div className="text-gray-500 dark:text-gray-400 text-xs mt-1">{formatTimestamp(message.timestamp)}</div>
+              <div key={index} className={cn(
+                "pb-2 text-sm border-b border-gray-200 dark:border-gray-700",
+                message.isSystem && "italic text-gray-500"
+              )}>
+                <div className={cn(
+                  "font-medium break-words",
+                  message.isAiMessage 
+                    ? "text-blue-600 dark:text-blue-400" 
+                    : message.isSystem 
+                      ? "text-gray-500 dark:text-gray-400" 
+                      : "text-gray-800 dark:text-gray-200"
+                )}>
+                  {message.isSystem ? "System: " : message.isAiMessage ? "AI: " : "You: "}
+                  {message.text}
+                </div>
+                <div className="text-gray-500 dark:text-gray-400 text-xs mt-1">
+                  {formatTimestamp(message.timestamp)}
+                </div>
               </div>
             ))
           )}
