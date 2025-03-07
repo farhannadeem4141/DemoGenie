@@ -1,5 +1,5 @@
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Header from '@/components/Header';
 import CTA from '@/components/CTA';
 import Benefits from '@/components/Benefits';
@@ -38,6 +38,7 @@ const Index = () => {
   const { toast } = useToast();
   const vapiInstanceRef = useRef<any>(null);
   const hasShownWelcomeMessage = useRef(false);
+  const [isRecordingActive, setIsRecordingActive] = useState(false);
 
   useEffect(() => {
     console.log("Index component mounted");
@@ -102,9 +103,10 @@ const Index = () => {
           });
         };
         
-        // Handle voice input
+        // Handle voice input and recording status
         const handleVoiceInput = (input: any) => {
           console.log("Voice input received:", input);
+          setIsRecordingActive(true);
           
           if (input && input.transcript) {
             console.log("Voice transcript:", input.transcript);
@@ -117,6 +119,19 @@ const Index = () => {
               }
             }));
             
+            // Store in localStorage for debugging
+            try {
+              const savedInputs = JSON.parse(localStorage.getItem('voice_input_history') || '[]');
+              const newVoiceInput = {
+                text: input.transcript,
+                timestamp: Date.now()
+              };
+              localStorage.setItem('voice_input_history', JSON.stringify([newVoiceInput, ...savedInputs].slice(0, 50)));
+              console.log("Saved voice input to localStorage:", newVoiceInput);
+            } catch (e) {
+              console.error('Error saving voice input to localStorage:', e);
+            }
+            
             // Show toast for voice input
             toast({
               title: "Voice Input",
@@ -125,12 +140,40 @@ const Index = () => {
             });
           }
         };
+        
+        // Handler for conversation state changes
+        const handleStateChange = (state: any) => {
+          console.log("Vapi state changed:", state);
+          
+          if (state && state.status) {
+            // If conversation starts or ends
+            if (state.status === 'connecting' || state.status === 'connected') {
+              setIsRecordingActive(true);
+              console.log("Voice recording activated");
+              
+              // Dispatch recording started event
+              window.dispatchEvent(new CustomEvent('recording_status_change', {
+                detail: { isActive: true }
+              }));
+            } else if (state.status === 'disconnected' || state.status === 'error') {
+              setIsRecordingActive(false);
+              console.log("Voice recording deactivated");
+              
+              // Dispatch recording ended event
+              window.dispatchEvent(new CustomEvent('recording_status_change', {
+                detail: { isActive: false }
+              }));
+            }
+          }
+        };
 
         // Initialize Vapi with the config 
         const customConfig = {
           ...buttonConfig,
           onMessage: handleMessage,
-          onTranscript: handleVoiceInput // Add handler for voice input transcripts
+          onTranscript: handleVoiceInput, // Add handler for voice input transcripts
+          onStateChange: handleStateChange, // Add handler for conversation state
+          debug: true // Enable debug mode to get more logs
         };
 
         // Dispatch an initial welcome message event to trigger the video display - ONLY ONCE
@@ -187,9 +230,14 @@ const Index = () => {
         <SocialProof />
         <StepGuide />
         <FAQ />
-        <TranscriptListener />
+        <TranscriptListener isRecording={isRecordingActive} />
       </main>
       <Footer />
+      {isRecordingActive && (
+        <div className="fixed top-4 right-4 bg-red-500 text-white px-4 py-2 rounded-full animate-pulse">
+          Recording Active
+        </div>
+      )}
     </div>
   );
 };

@@ -4,18 +4,20 @@ import { useConversationHistory } from '@/hooks/useConversationHistory';
 import VideoPlayer from './VideoPlayer';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
-import { AlertTriangle, X, Mic } from 'lucide-react';
+import { AlertTriangle, X, Mic, MicOff } from 'lucide-react';
 import { queryVideosWithCatalogTag } from '@/services/video';
 
 interface TranscriptListenerProps {
   className?: string;
+  isRecording?: boolean;
 }
 
-const TranscriptListener: React.FC<TranscriptListenerProps> = ({ className }) => {
+const TranscriptListener: React.FC<TranscriptListenerProps> = ({ className, isRecording = false }) => {
   const { addMessage, currentVideo, setCurrentVideo, errorLogs, clearErrorLogs } = useConversationHistory();
   const [isVideoVisible, setIsVideoVisible] = useState(false);
   const [showErrorLog, setShowErrorLog] = useState(false);
   const [voiceInputHistory, setVoiceInputHistory] = useState<{text: string, timestamp: number}[]>([]);
+  const [recordingStatus, setRecordingStatus] = useState(isRecording);
   const { toast } = useToast();
 
   // Make video visible after a short delay to create a nice animation
@@ -31,6 +33,11 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({ className }) =>
       setIsVideoVisible(false);
     }
   }, [currentVideo]);
+
+  // Update recording status from props
+  useEffect(() => {
+    setRecordingStatus(isRecording);
+  }, [isRecording]);
 
   // Listen for messages from the AI assistant via window event
   useEffect(() => {
@@ -135,15 +142,26 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({ className }) =>
       }
     };
 
+    // Listen for recording status changes
+    const handleRecordingStatusChange = (event: any) => {
+      if (event.detail && typeof event.detail.isActive === 'boolean') {
+        console.log("%c [RECORDING] Status changed to: " + (event.detail.isActive ? "ACTIVE" : "INACTIVE"), 
+          "background: #e63946; color: white; padding: 2px; border-radius: 4px;");
+        setRecordingStatus(event.detail.isActive);
+      }
+    };
+
     // Setup event listeners
     window.addEventListener('vapi_message', captureAiMessages);
     window.addEventListener('voice_input', captureVoiceInput);
+    window.addEventListener('recording_status_change', handleRecordingStatusChange);
     
-    console.log("TranscriptListener: Set up event listeners for vapi_message and voice_input");
+    console.log("TranscriptListener: Set up event listeners for vapi_message, voice_input, and recording_status_change");
 
     return () => {
       window.removeEventListener('vapi_message', captureAiMessages);
       window.removeEventListener('voice_input', captureVoiceInput);
+      window.removeEventListener('recording_status_change', handleRecordingStatusChange);
     };
   }, [addMessage, toast, setCurrentVideo]);
 
@@ -151,6 +169,11 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({ className }) =>
   useEffect(() => {
     try {
       const savedInputs = JSON.parse(localStorage.getItem('voice_input_history') || '[]');
+      if (savedInputs.length > 0) {
+        console.log("Loaded voice input history from localStorage:", savedInputs);
+      } else {
+        console.log("No voice input history found in localStorage");
+      }
       setVoiceInputHistory(savedInputs);
     } catch (e) {
       console.error('Error loading voice input history from localStorage:', e);
@@ -211,8 +234,27 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({ className }) =>
     simulateVoiceInput("Business Profile");
   };
 
+  // Clear voice input history
+  const clearVoiceInputHistory = () => {
+    setVoiceInputHistory([]);
+    localStorage.removeItem('voice_input_history');
+    console.log("Voice input history cleared");
+    toast({
+      title: "History Cleared",
+      description: "Voice input history has been cleared",
+      duration: 3000,
+    });
+  };
+
   return (
     <div className={cn("fixed right-4 bottom-24 w-80 z-50 transition-all", className)}>
+      {/* Recording Status Indicator */}
+      {recordingStatus && (
+        <div className="mb-3 flex items-center justify-center bg-red-500 text-white p-2 rounded-lg shadow-lg animate-pulse">
+          <Mic className="mr-2" size={16} /> Recording Active
+        </div>
+      )}
+
       {/* Voice Input History Panel */}
       <div className="mb-3">
         <button 
@@ -225,15 +267,12 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({ className }) =>
           {showErrorLog ? "Hide Voice Input History" : "Show Voice Input History"} ({voiceInputHistory.length})
         </button>
         
-        {showErrorLog && voiceInputHistory.length > 0 && (
+        {showErrorLog && (
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden max-h-96 flex flex-col border border-blue-200 dark:border-blue-900 mb-3">
             <div className="bg-blue-500 text-white p-3 flex justify-between items-center">
               <h3 className="font-bold">Voice Input History</h3>
               <button 
-                onClick={() => {
-                  setVoiceInputHistory([]);
-                  localStorage.removeItem('voice_input_history');
-                }}
+                onClick={clearVoiceInputHistory}
                 className="p-1 rounded hover:bg-blue-600 text-white text-xs"
                 title="Clear history"
               >
@@ -241,12 +280,20 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({ className }) =>
               </button>
             </div>
             <div className="overflow-y-auto max-h-64 p-3 space-y-3">
-              {voiceInputHistory.map((input, index) => (
-                <div key={index} className="border-b border-gray-200 dark:border-gray-700 pb-2 text-sm">
-                  <div className="font-medium text-gray-800 dark:text-gray-200 break-words">{input.text}</div>
-                  <div className="text-gray-500 dark:text-gray-400 text-xs mt-1">{formatTimestamp(input.timestamp)}</div>
+              {voiceInputHistory.length === 0 ? (
+                <div className="text-center text-gray-500 dark:text-gray-400 py-4">
+                  <MicOff className="mx-auto mb-2" size={24} />
+                  <p>No voice inputs recorded yet.</p>
+                  <p className="text-xs mt-2">Click the green AI Assistant button to start recording.</p>
                 </div>
-              ))}
+              ) : (
+                voiceInputHistory.map((input, index) => (
+                  <div key={index} className="border-b border-gray-200 dark:border-gray-700 pb-2 text-sm">
+                    <div className="font-medium text-gray-800 dark:text-gray-200 break-words">{input.text}</div>
+                    <div className="text-gray-500 dark:text-gray-400 text-xs mt-1">{formatTimestamp(input.timestamp)}</div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         )}
