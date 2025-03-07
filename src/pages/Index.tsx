@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useState } from 'react';
 import Header from '@/components/Header';
 import CTA from '@/components/CTA';
@@ -32,6 +31,7 @@ declare global {
   interface Window {
     vapiSDK?: ExtendedVapiSDK;
     vapiInstance?: any; // Make vapiInstance globally accessible
+    activateRecording?: () => void; // Add a function to activate recording globally
   }
 }
 
@@ -41,12 +41,46 @@ const Index = () => {
   const hasShownWelcomeMessage = useRef(false);
   const [isRecordingActive, setIsRecordingActive] = useState(false);
   const [debugInfo, setDebugInfo] = useState<string[]>([]);
+  const buttonRef = useRef<HTMLDivElement | null>(null);
 
   // Add debug log function
   const addDebugLog = (message: string) => {
     console.log(`[DEBUG] ${message}`);
     setDebugInfo(prev => [message, ...prev].slice(0, 20));
   };
+
+  // Function to manually activate recording
+  const activateRecording = () => {
+    addDebugLog("Manual recording activation triggered");
+    setIsRecordingActive(true);
+    
+    // Dispatch recording started event
+    window.dispatchEvent(new CustomEvent('recording_status_change', {
+      detail: { isActive: true }
+    }));
+    
+    toast({
+      title: "Recording Started",
+      description: "Voice recording is now active",
+      duration: 3000,
+    });
+    
+    // Store an empty entry to initialize the voice input history if it doesn't exist
+    try {
+      const savedInputs = JSON.parse(localStorage.getItem('voice_input_history') || '[]');
+      if (savedInputs.length === 0) {
+        localStorage.setItem('voice_input_history', JSON.stringify([]));
+        addDebugLog("Initialized empty voice input history in localStorage");
+      }
+    } catch (e) {
+      console.error('Error initializing voice input history:', e);
+    }
+  };
+
+  // Make the activation function globally available
+  useEffect(() => {
+    window.activateRecording = activateRecording;
+  }, []);
 
   useEffect(() => {
     console.log("Index component mounted");
@@ -199,28 +233,83 @@ const Index = () => {
           }
         };
 
-        // Function to handle click on Vapi button (for debugging)
-        const trackVapiButtonClick = () => {
+        // Improved function to track and handle Vapi button click
+        const setupVapiButtonClickListener = () => {
+          // Create a MutationObserver to watch for the Vapi button being added to the DOM
+          const observer = new MutationObserver((mutations) => {
+            for (const mutation of mutations) {
+              if (mutation.type === 'childList') {
+                const addedNodes = Array.from(mutation.addedNodes);
+                for (const node of addedNodes) {
+                  if (node instanceof HTMLElement) {
+                    // Check for elements that might be or contain the Vapi button
+                    const possibleButtons = [
+                      ...Array.from(node.querySelectorAll('button')),
+                      ...Array.from(node.querySelectorAll('div[role="button"]')),
+                      node
+                    ];
+                    
+                    for (const btn of possibleButtons) {
+                      // Check if this looks like the Vapi button
+                      if (
+                        (btn.textContent?.includes('AI Assistant') ||
+                         btn.style.backgroundColor === 'rgb(37, 211, 102)' ||
+                         btn.getAttribute('style')?.includes('rgb(37, 211, 102)'))
+                      ) {
+                        addDebugLog("Found AI Assistant button, attaching click handler");
+                        buttonRef.current = btn as HTMLDivElement;
+                        
+                        // Add click event listener
+                        btn.addEventListener('click', () => {
+                          addDebugLog("AI Assistant button clicked!");
+                          // Immediately activate recording
+                          activateRecording();
+                          
+                          // Force connection if vapiInstance exists
+                          if (vapiInstanceRef.current && vapiInstanceRef.current.connect) {
+                            try {
+                              addDebugLog("Attempting to directly connect vapiInstance");
+                              vapiInstanceRef.current.connect();
+                            } catch (e) {
+                              addDebugLog(`Error connecting vapiInstance: ${e}`);
+                            }
+                          }
+                        });
+                        
+                        // No need to keep observing once we've found the button
+                        observer.disconnect();
+                        break;
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          });
+
+          // Start observing the document body
+          observer.observe(document.body, { childList: true, subtree: true });
+          
+          // Also watch for click events on the document to catch any clicks on the button
           document.addEventListener('click', (e) => {
             const target = e.target as HTMLElement;
-            // Try to identify the Vapi button by its characteristics
-            if (target && 
-                (target.textContent?.includes('AI Assistant') || 
-                 target.closest('[style*="rgb(37, 211, 102)"]') ||
-                 target.style.backgroundColor === 'rgb(37, 211, 102)')) {
-              addDebugLog(`Possible Vapi button clicked at ${new Date().toISOString()}`);
-              // Attempt to prompt recording status
-              setTimeout(() => {
-                if (!isRecordingActive) {
-                  addDebugLog("Recording not activated after button click");
-                }
-              }, 2000);
+            
+            // Check if the clicked element looks like the Vapi button
+            if (
+              target && 
+              (target.textContent?.includes('AI Assistant') || 
+               target.style.backgroundColor === 'rgb(37, 211, 102)' ||
+               target.getAttribute('style')?.includes('rgb(37, 211, 102)'))
+            ) {
+              addDebugLog("AI Assistant button clicked through global click handler!");
+              // Immediately activate recording
+              activateRecording();
             }
           });
         };
         
-        // Start tracking button clicks
-        trackVapiButtonClick();
+        // Start watching for the Vapi button
+        setupVapiButtonClickListener();
 
         // Initialize Vapi with the config 
         const customConfig = {
@@ -325,6 +414,12 @@ const Index = () => {
       {/* Debug panel - fixed position */}
       <div className="fixed left-4 top-4 bg-black/80 text-white p-3 rounded-lg shadow-lg z-50 max-w-xs max-h-[300px] overflow-y-auto text-xs">
         <h4 className="font-bold mb-2">Debug Info</h4>
+        <button 
+          onClick={activateRecording}
+          className="bg-green-500 text-white px-2 py-1 rounded text-xs mb-2 w-full"
+        >
+          Activate Recording Manually
+        </button>
         <ul className="space-y-1">
           {debugInfo.map((log, i) => (
             <li key={i} className="border-t border-gray-700 pt-1">{log}</li>

@@ -46,6 +46,49 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
     setRecordingStatus(isRecording);
   }, [isRecording]);
 
+  // Listen for recording activation through global method
+  useEffect(() => {
+    const checkForActivationButtons = () => {
+      if (window.activateRecording) {
+        console.log("Found global activateRecording function");
+      } else {
+        console.log("Global activateRecording function not found");
+      }
+    };
+    
+    // Check shortly after component mounts
+    setTimeout(checkForActivationButtons, 1000);
+    
+    // Set up a click event listener for green buttons that might be the AI Assistant button
+    const handlePossibleAssistantButtonClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      
+      // Look for elements with green background that might be the AI Assistant button
+      if (target && 
+          (target.style.backgroundColor === 'rgb(37, 211, 102)' || 
+           target.getAttribute('style')?.includes('rgb(37, 211, 102)') ||
+           target.textContent?.includes('AI Assistant'))) {
+        console.log("Possible AI Assistant button clicked");
+        
+        // Extra check for localStorage readiness
+        try {
+          if (!localStorage.getItem('voice_input_history')) {
+            localStorage.setItem('voice_input_history', JSON.stringify([]));
+            console.log("Initialized empty voice input history from button click handler");
+          }
+        } catch (e) {
+          console.error("Error checking localStorage:", e);
+        }
+      }
+    };
+    
+    document.addEventListener('click', handlePossibleAssistantButtonClick);
+    
+    return () => {
+      document.removeEventListener('click', handlePossibleAssistantButtonClick);
+    };
+  }, []);
+
   // Listen for messages from the AI assistant via window event
   useEffect(() => {
     // This function will capture the AI messages
@@ -156,6 +199,18 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
           "background: #e63946; color: white; padding: 2px; border-radius: 4px;");
         setRecordingStatus(event.detail.isActive);
         
+        // Initialize localStorage storage for voice inputs if it doesn't exist
+        if (event.detail.isActive) {
+          try {
+            if (!localStorage.getItem('voice_input_history')) {
+              localStorage.setItem('voice_input_history', JSON.stringify([]));
+              console.log("Initialized empty voice input history from recording status change");
+            }
+          } catch (e) {
+            console.error('Error initializing voice input history:', e);
+          }
+        }
+        
         toast({
           title: event.detail.isActive ? "Recording Started" : "Recording Stopped",
           description: event.detail.isActive 
@@ -188,10 +243,14 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
         console.log("Loaded voice input history from localStorage:", savedInputs);
       } else {
         console.log("No voice input history found in localStorage");
+        // Initialize empty array if not present
+        localStorage.setItem('voice_input_history', JSON.stringify([]));
       }
       setVoiceInputHistory(savedInputs);
     } catch (e) {
       console.error('Error loading voice input history from localStorage:', e);
+      // Initialize an empty array in case of error
+      localStorage.setItem('voice_input_history', JSON.stringify([]));
     }
   }, []);
 
@@ -280,6 +339,12 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
           description: "Vapi instance found, check console for details",
           duration: 3000,
         });
+        
+        // If window.activateRecording exists, try calling it
+        if (window.activateRecording) {
+          console.log("Found global activateRecording function, calling it");
+          window.activateRecording();
+        }
       } else {
         console.log("No global Vapi instance found");
         toast({
@@ -382,6 +447,12 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
                 className="bg-blue-500 text-white p-2 rounded w-full hover:bg-blue-600"
               >
                 Debug Vapi Connection
+              </button>
+              <button 
+                onClick={() => window.activateRecording && window.activateRecording()}
+                className="bg-green-500 text-white p-2 rounded w-full hover:bg-green-600"
+              >
+                Activate Recording (Global)
               </button>
               <p className="text-xs text-gray-500 mt-2">
                 Current recording status: {recordingStatus ? "ACTIVE" : "INACTIVE"}
