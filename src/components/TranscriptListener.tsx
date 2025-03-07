@@ -81,6 +81,36 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
   }, [recordingStatus]);
 
   useEffect(() => {
+    // Load any existing voice inputs from localStorage on component mount
+    const loadExistingVoiceInputs = () => {
+      try {
+        const storedInputs = localStorage.getItem('voice_input_history');
+        if (storedInputs) {
+          const inputs = JSON.parse(storedInputs);
+          if (Array.isArray(inputs) && inputs.length > 0) {
+            console.log("Found existing voice inputs in localStorage, processing...");
+            
+            // Add each voice input to the conversation history
+            inputs.forEach(input => {
+              if (input && input.text) {
+                console.log("Adding voice input from storage:", input.text.substring(0, 50) + "...");
+                addMessage({
+                  text: input.text,
+                  isAiMessage: false,
+                  timestamp: input.timestamp || Date.now()
+                });
+              }
+            });
+          }
+        }
+      } catch (error) {
+        console.error("Error loading voice inputs from localStorage:", error);
+      }
+    };
+    
+    // Call this immediately to load existing inputs
+    loadExistingVoiceInputs();
+    
     const captureAiMessages = (event: any) => {
       if (event.detail && event.detail.type === 'ai_message' && event.detail.text) {
         console.log("Received AI message:", event.detail.text);
@@ -103,6 +133,7 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
     const captureVoiceInput = async (event: any) => {
       if (event.detail && event.detail.type === 'voice_input' && event.detail.text) {
         const inputText = event.detail.text;
+        console.log("Voice input captured:", inputText);
         
         // Always add user voice input to conversation history
         addMessage({
@@ -110,6 +141,22 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
           isAiMessage: false,
           timestamp: Date.now()
         });
+        
+        // Save the voice input to localStorage directly here as well
+        try {
+          const savedInputs = JSON.parse(localStorage.getItem('voice_input_history') || '[]');
+          const newInput = {
+            text: inputText,
+            timestamp: Date.now()
+          };
+          
+          localStorage.setItem('voice_input_history', 
+            JSON.stringify([newInput, ...savedInputs].slice(0, 50))
+          );
+          console.log("Saved voice input to local storage");
+        } catch (error) {
+          console.error("Error saving voice input to localStorage:", error);
+        }
         
         if (inputText.toLowerCase().includes('catalog')) {
           console.log("Catalog keyword detected, using specialized catalog query");
@@ -175,35 +222,6 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
         });
       }
     };
-    
-    // Check for any existing messages in localStorage on initial load
-    const loadExistingMessages = () => {
-      const existingVoiceInputs = localStorage.getItem('voice_input_history');
-      if (existingVoiceInputs) {
-        try {
-          const inputs = JSON.parse(existingVoiceInputs);
-          if (Array.isArray(inputs) && inputs.length > 0) {
-            console.log("Found existing voice inputs in localStorage:", inputs.length);
-            
-            // Add them to conversation if not already present
-            inputs.forEach(input => {
-              if (input.text) {
-                addMessage({
-                  text: input.text,
-                  isAiMessage: false,
-                  timestamp: input.timestamp || Date.now()
-                });
-              }
-            });
-          }
-        } catch (error) {
-          console.error("Error parsing voice inputs from localStorage:", error);
-        }
-      }
-    };
-    
-    // Load existing messages when component mounts
-    loadExistingMessages();
 
     window.addEventListener('vapi_message', captureAiMessages);
     window.addEventListener('voice_input', captureVoiceInput);

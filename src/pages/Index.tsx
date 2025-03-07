@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useState } from 'react';
 import Header from '@/components/Header';
 import CTA from '@/components/CTA';
@@ -223,6 +224,7 @@ const Index = () => {
             console.log("Voice transcript:", input.transcript);
             addDebugLog(`Transcript content: "${input.transcript.substring(0, 50)}..."`);
             
+            // Ensure we properly dispatch the voice input event for the listener to capture
             window.dispatchEvent(new CustomEvent('voice_input', {
               detail: {
                 type: 'voice_input',
@@ -230,13 +232,18 @@ const Index = () => {
               }
             }));
             
+            // Save voice input to localStorage here for redundancy
             try {
               const savedInputs = JSON.parse(localStorage.getItem('voice_input_history') || '[]');
               const newVoiceInput = {
                 text: input.transcript,
                 timestamp: Date.now()
               };
-              localStorage.setItem('voice_input_history', JSON.stringify([newVoiceInput, ...savedInputs].slice(0, 50)));
+              
+              localStorage.setItem('voice_input_history', 
+                JSON.stringify([newVoiceInput, ...savedInputs].slice(0, 50))
+              );
+              
               console.log("Saved voice input to localStorage:", newVoiceInput);
               addDebugLog(`Saved to localStorage: "${input.transcript.substring(0, 40)}..."`);
             } catch (e) {

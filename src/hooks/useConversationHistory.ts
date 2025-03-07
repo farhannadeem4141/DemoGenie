@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { searchVideosByKeyword, VideoSearchResult } from '@/services/video';
+import { searchVideosByKeyword } from '@/services/video';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
@@ -40,6 +40,41 @@ export function useConversationHistory() {
         setMessages(parsedMessages);
       } catch (e) {
         console.error('Failed to parse conversation history:', e);
+      }
+    }
+    
+    const voiceInputs = localStorage.getItem('voice_input_history');
+    if (voiceInputs) {
+      try {
+        const parsedInputs = JSON.parse(voiceInputs);
+        console.log("Found voice inputs in localStorage:", parsedInputs.length);
+        
+        if (Array.isArray(parsedInputs) && parsedInputs.length > 0) {
+          const existingTexts = new Set(messages.map(m => m.text));
+          
+          const newInputs = parsedInputs
+            .filter(input => input && input.text && !existingTexts.has(input.text))
+            .map(input => ({
+              text: input.text,
+              isAiMessage: false,
+              timestamp: input.timestamp || Date.now()
+            }));
+          
+          if (newInputs.length > 0) {
+            console.log("Adding", newInputs.length, "voice inputs to conversation history");
+            setMessages(prevMessages => {
+              const updatedMessages = [...prevMessages, ...newInputs];
+              try {
+                localStorage.setItem('conversation_history', JSON.stringify(updatedMessages));
+              } catch (e) {
+                console.error('Failed to save conversation history:', e);
+              }
+              return updatedMessages;
+            });
+          }
+        }
+      } catch (e) {
+        console.error('Failed to parse voice inputs from localStorage:', e);
       }
     }
   }, []);
@@ -178,7 +213,6 @@ export function useConversationHistory() {
     
     console.log("%c [KEYWORD LOG] Phrases to check: ", "background: #4361ee; color: white; padding: 2px; border-radius: 4px;", phrases);
     
-    // Log each phrase check individually for debugging
     phrases.forEach(phrase => {
       const lowerText = text.toLowerCase();
       const lowerPhrase = phrase.toLowerCase();
@@ -189,7 +223,6 @@ export function useConversationHistory() {
       console.log(`%c [KEYWORD LOG]   - Case-insensitive match position: ${lowerText.indexOf(lowerPhrase)}`, "background: #4361ee; color: white; padding: 2px; border-radius: 4px;");
     });
     
-    // Use case-insensitive search for phrases
     const foundPhrases = phrases.filter(phrase => 
       text.toLowerCase().includes(phrase.toLowerCase())
     );
@@ -290,7 +323,6 @@ export function useConversationHistory() {
     const highPriorityKeywords = ["Quick Replies", "Quick Reply", "Message Templates", "Templates", "WhatsApp Business", "Business Profile"];
     console.log("%c [SEARCH LOG] High priority keywords: " + highPriorityKeywords.join(", "), "background: #f72585; color: white; padding: 2px; border-radius: 4px;");
     
-    // Check each keyword against high priority list with detailed logging
     let priorityKeyword = null;
     for (const kw of keywords) {
       for (const priority of highPriorityKeywords) {
