@@ -24,6 +24,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const [errorLoading, setErrorLoading] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isMuted, setIsMuted] = useState(true); // Start muted by default
+  const [isVertical, setIsVertical] = useState(false);
   const mountedRef = useRef(true);
 
   useEffect(() => {
@@ -55,6 +56,13 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         // Add a event listener for when metadata is loaded
         const handleLoadedMetadata = () => {
           if (!mountedRef.current) return;
+          
+          // Check if video is vertical (portrait mode)
+          if (videoRef.current) {
+            const isPortrait = videoRef.current.videoHeight > videoRef.current.videoWidth;
+            setIsVertical(isPortrait);
+            console.log("Video orientation detected:", isPortrait ? "vertical" : "horizontal");
+          }
           
           setIsLoading(false);
           videoRef.current?.play().catch(err => {
@@ -153,7 +161,10 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
           </button>
         </div>
       ) : (
-        <>
+        <div className={cn(
+          "relative flex justify-center bg-black",
+          isVertical ? "max-h-[70vh] py-2" : ""
+        )}>
           {isLoading && (
             <div className="absolute inset-0 flex items-center justify-center bg-black/50 z-10">
               <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-white"></div>
@@ -162,7 +173,10 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
           <video
             ref={videoRef}
             controls
-            className="w-full h-auto"
+            className={cn(
+              "w-full h-auto",
+              isVertical ? "max-w-[80%] max-h-[65vh] object-contain" : "w-full"
+            )}
             onEnded={onEnded}
             onError={handleVideoError}
             preload="auto"
@@ -171,7 +185,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
             <source src={videoUrl} type="video/mp4" />
             Your browser does not support the video tag.
           </video>
-        </>
+        </div>
       )}
     </div>
   );
