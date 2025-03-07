@@ -4,18 +4,24 @@ import { useConversationHistory } from '@/hooks/useConversationHistory';
 import VideoPlayer from './VideoPlayer';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
-import { AlertTriangle, X, Mic, MicOff } from 'lucide-react';
+import { AlertTriangle, X, Mic, MicOff, Bug } from 'lucide-react';
 import { queryVideosWithCatalogTag } from '@/services/video';
 
 interface TranscriptListenerProps {
   className?: string;
   isRecording?: boolean;
+  debugLogs?: string[];
 }
 
-const TranscriptListener: React.FC<TranscriptListenerProps> = ({ className, isRecording = false }) => {
+const TranscriptListener: React.FC<TranscriptListenerProps> = ({ 
+  className, 
+  isRecording = false,
+  debugLogs = []
+}) => {
   const { addMessage, currentVideo, setCurrentVideo, errorLogs, clearErrorLogs } = useConversationHistory();
   const [isVideoVisible, setIsVideoVisible] = useState(false);
   const [showErrorLog, setShowErrorLog] = useState(false);
+  const [showDebugPanel, setShowDebugPanel] = useState(false);
   const [voiceInputHistory, setVoiceInputHistory] = useState<{text: string, timestamp: number}[]>([]);
   const [recordingStatus, setRecordingStatus] = useState(isRecording);
   const { toast } = useToast();
@@ -36,6 +42,7 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({ className, isRe
 
   // Update recording status from props
   useEffect(() => {
+    console.log("Recording status prop changed:", isRecording);
     setRecordingStatus(isRecording);
   }, [isRecording]);
 
@@ -148,6 +155,14 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({ className, isRe
         console.log("%c [RECORDING] Status changed to: " + (event.detail.isActive ? "ACTIVE" : "INACTIVE"), 
           "background: #e63946; color: white; padding: 2px; border-radius: 4px;");
         setRecordingStatus(event.detail.isActive);
+        
+        toast({
+          title: event.detail.isActive ? "Recording Started" : "Recording Stopped",
+          description: event.detail.isActive 
+            ? "Voice recording is now active" 
+            : "Voice recording is now inactive",
+          duration: 3000,
+        });
       }
     };
 
@@ -246,6 +261,39 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({ className, isRe
     });
   };
 
+  // Manual test of recording status event
+  const testRecordingStatusEvent = (isActive: boolean) => {
+    console.log(`Testing recording status event: ${isActive ? 'ACTIVE' : 'INACTIVE'}`);
+    window.dispatchEvent(new CustomEvent('recording_status_change', {
+      detail: { isActive }
+    }));
+  };
+
+  // Debug Vapi connection
+  const debugVapiConnection = () => {
+    console.log("Debugging Vapi connection...");
+    try {
+      if (window.vapiInstance) {
+        console.log("Found global Vapi instance:", window.vapiInstance);
+        toast({
+          title: "Vapi Debug",
+          description: "Vapi instance found, check console for details",
+          duration: 3000,
+        });
+      } else {
+        console.log("No global Vapi instance found");
+        toast({
+          variant: "destructive",
+          title: "Vapi Debug",
+          description: "No Vapi instance found",
+          duration: 3000,
+        });
+      }
+    } catch (e) {
+      console.error("Error debugging Vapi:", e);
+    }
+  };
+
   return (
     <div className={cn("fixed right-4 bottom-24 w-80 z-50 transition-all", className)}>
       {/* Recording Status Indicator */}
@@ -299,6 +347,67 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({ className, isRe
         )}
       </div>
 
+      {/* Debug Panel */}
+      <div className="mb-3">
+        <button 
+          onClick={() => setShowDebugPanel(!showDebugPanel)}
+          className={cn(
+            "p-2 rounded-lg shadow-lg bg-purple-500 text-white hover:bg-purple-600 transition-colors w-full mb-2",
+            showDebugPanel && "bg-purple-700"
+          )}
+        >
+          {showDebugPanel ? "Hide Debug Panel" : "Show Debug Panel"}
+        </button>
+        
+        {showDebugPanel && (
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden max-h-96 flex flex-col border border-purple-200 dark:border-purple-900 mb-3">
+            <div className="bg-purple-500 text-white p-3">
+              <h3 className="font-bold">Debug Controls</h3>
+            </div>
+            <div className="p-3 space-y-2">
+              <button 
+                onClick={() => testRecordingStatusEvent(true)}
+                className="bg-green-500 text-white p-2 rounded w-full hover:bg-green-600"
+              >
+                Test Start Recording
+              </button>
+              <button 
+                onClick={() => testRecordingStatusEvent(false)}
+                className="bg-red-500 text-white p-2 rounded w-full hover:bg-red-600"
+              >
+                Test Stop Recording
+              </button>
+              <button 
+                onClick={debugVapiConnection}
+                className="bg-blue-500 text-white p-2 rounded w-full hover:bg-blue-600"
+              >
+                Debug Vapi Connection
+              </button>
+              <p className="text-xs text-gray-500 mt-2">
+                Current recording status: {recordingStatus ? "ACTIVE" : "INACTIVE"}
+              </p>
+              <p className="text-xs text-gray-500">
+                isRecording prop: {isRecording ? "true" : "false"}
+              </p>
+              <div className="mt-3">
+                <h4 className="font-medium text-sm mb-1">Application Debug Logs:</h4>
+                <div className="bg-gray-100 dark:bg-gray-900 p-2 rounded-lg max-h-40 overflow-y-auto text-xs">
+                  {debugLogs.length === 0 ? (
+                    <p className="text-gray-500">No debug logs available</p>
+                  ) : (
+                    <ul className="space-y-1">
+                      {debugLogs.map((log, i) => (
+                        <li key={i} className="text-gray-800 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700 pb-1">{log}</li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Test buttons for simulating voice input */}
       <div className="mb-3 flex justify-end gap-2">
         <button 
@@ -335,6 +444,15 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({ className, isRe
         >
           <Mic size={20} />
           <span className="sr-only">Test Business profile</span>
+        </button>
+        
+        <button 
+          onClick={debugVapiConnection}
+          className="p-2 rounded-full shadow-lg bg-amber-500 text-white hover:bg-amber-600 transition-colors"
+          title="Debug Vapi Connection"
+        >
+          <Bug size={20} />
+          <span className="sr-only">Debug Vapi</span>
         </button>
         
         <button 

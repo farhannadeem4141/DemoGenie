@@ -10,3 +10,22 @@ export interface VideoSearchResult {
   };
   rawQuery?: string;
 }
+
+export interface VapiMessage {
+  text?: string;
+  content?: string;
+  type?: string;
+  timestamp?: number;
+}
+
+export interface VapiState {
+  status?: 'connecting' | 'connected' | 'disconnected' | 'error';
+  error?: any;
+  details?: any;
+}
+
+export interface VoiceInput {
+  transcript?: string;
+  isFinal?: boolean;
+  confidence?: number;
+}
