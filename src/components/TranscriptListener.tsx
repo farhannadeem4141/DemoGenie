@@ -15,6 +15,7 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({ className }) =>
   const { addMessage, currentVideo, setCurrentVideo, errorLogs, clearErrorLogs } = useConversationHistory();
   const [isVideoVisible, setIsVideoVisible] = useState(false);
   const [showErrorLog, setShowErrorLog] = useState(false);
+  const [voiceInputHistory, setVoiceInputHistory] = useState<{text: string, timestamp: number}[]>([]);
   const { toast } = useToast();
 
   // Make video visible after a short delay to create a nice animation
@@ -53,18 +54,49 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({ className }) =>
     // Set up another event listener specifically for voice input
     const captureVoiceInput = async (event: any) => {
       if (event.detail && event.detail.type === 'voice_input' && event.detail.text) {
-        console.log("%c [VOICE LOG] Received voice input: " + event.detail.text, "background: #2a9d8f; color: white; padding: 2px; border-radius: 4px;");
-        const inputText = event.detail.text.toLowerCase();
-        console.log("%c [VOICE LOG] Normalized input (lowercase): " + inputText, "background: #2a9d8f; color: white; padding: 2px; border-radius: 4px;");
+        // Save to voice input history for debugging
+        const newVoiceInput = {
+          text: event.detail.text,
+          timestamp: Date.now()
+        };
+        setVoiceInputHistory(prev => [newVoiceInput, ...prev].slice(0, 20));
         
-        // Log exact input for debugging case sensitivity
-        console.log("%c [VOICE LOG] Original case input: " + event.detail.text, "background: #2a9d8f; color: white; padding: 2px; border-radius: 4px;");
-        console.log("%c [VOICE LOG] Input contains 'business profile'? " + inputText.includes('business profile'), "background: #2a9d8f; color: white; padding: 2px; border-radius: 4px;");
-        console.log("%c [VOICE LOG] Input contains 'business'? " + inputText.includes('business'), "background: #2a9d8f; color: white; padding: 2px; border-radius: 4px;");
-        console.log("%c [VOICE LOG] Input contains 'profile'? " + inputText.includes('profile'), "background: #2a9d8f; color: white; padding: 2px; border-radius: 4px;");
+        // Save to localStorage for persistence
+        try {
+          const savedInputs = JSON.parse(localStorage.getItem('voice_input_history') || '[]');
+          localStorage.setItem('voice_input_history', JSON.stringify([newVoiceInput, ...savedInputs].slice(0, 50)));
+        } catch (e) {
+          console.error('Error saving voice input to localStorage:', e);
+        }
+        
+        // Enhanced logging for voice input debugging
+        console.log("%c [VOICE LOG] ========== NEW VOICE INPUT ==========", "background: #2a9d8f; color: white; padding: 4px; border-radius: 4px; font-weight: bold;");
+        console.log("%c [VOICE LOG] Raw voice input: " + event.detail.text, "background: #2a9d8f; color: white; padding: 2px; border-radius: 4px;");
+        console.log("%c [VOICE LOG] Timestamp: " + new Date().toISOString(), "background: #2a9d8f; color: white; padding: 2px; border-radius: 4px;");
+        console.log("%c [VOICE LOG] Input length: " + event.detail.text.length + " characters", "background: #2a9d8f; color: white; padding: 2px; border-radius: 4px;");
+        
+        // Log for case sensitivity debugging
+        const inputText = event.detail.text;
+        console.log("%c [VOICE LOG] Original case: " + inputText, "background: #2a9d8f; color: white; padding: 2px; border-radius: 4px;");
+        console.log("%c [VOICE LOG] Lowercase: " + inputText.toLowerCase(), "background: #2a9d8f; color: white; padding: 2px; border-radius: 4px;");
+        console.log("%c [VOICE LOG] Uppercase: " + inputText.toUpperCase(), "background: #2a9d8f; color: white; padding: 2px; border-radius: 4px;");
+        
+        // Check specific keyword matches
+        const specificKeywords = ["Business Profile", "business profile", "BUSINESS PROFILE", "Business profile"];
+        specificKeywords.forEach(keyword => {
+          console.log(`%c [VOICE LOG] Contains "${keyword}"? ${inputText.includes(keyword)}`, 
+            "background: #2a9d8f; color: white; padding: 2px; border-radius: 4px;");
+          console.log(`%c [VOICE LOG] Contains "${keyword}" (case insensitive)? ${inputText.toLowerCase().includes(keyword.toLowerCase())}`, 
+            "background: #2a9d8f; color: white; padding: 2px; border-radius: 4px;");
+        });
+        
+        // Word by word analysis
+        const words = inputText.split(/\s+/);
+        console.log("%c [VOICE LOG] Words in input: " + words.join(', '), 
+          "background: #2a9d8f; color: white; padding: 2px; border-radius: 4px;");
         
         // Special handling for catalog keyword
-        if (inputText.includes('catalog')) {
+        if (inputText.toLowerCase().includes('catalog')) {
           console.log("%c [VOICE LOG] Catalog keyword detected, using specialized catalog query", "background: #e76f51; color: white; padding: 2px; border-radius: 4px;");
           try {
             const result = await queryVideosWithCatalogTag();
@@ -114,6 +146,16 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({ className }) =>
       window.removeEventListener('voice_input', captureVoiceInput);
     };
   }, [addMessage, toast, setCurrentVideo]);
+
+  // Load voice input history from localStorage on component mount
+  useEffect(() => {
+    try {
+      const savedInputs = JSON.parse(localStorage.getItem('voice_input_history') || '[]');
+      setVoiceInputHistory(savedInputs);
+    } catch (e) {
+      console.error('Error loading voice input history from localStorage:', e);
+    }
+  }, []);
 
   // Handle video error
   const handleVideoError = () => {
@@ -171,6 +213,45 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({ className }) =>
 
   return (
     <div className={cn("fixed right-4 bottom-24 w-80 z-50 transition-all", className)}>
+      {/* Voice Input History Panel */}
+      <div className="mb-3">
+        <button 
+          onClick={() => setShowErrorLog(!showErrorLog)}
+          className={cn(
+            "p-2 rounded-lg shadow-lg bg-blue-500 text-white hover:bg-blue-600 transition-colors w-full mb-2",
+            showErrorLog && "bg-blue-700"
+          )}
+        >
+          {showErrorLog ? "Hide Voice Input History" : "Show Voice Input History"} ({voiceInputHistory.length})
+        </button>
+        
+        {showErrorLog && voiceInputHistory.length > 0 && (
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden max-h-96 flex flex-col border border-blue-200 dark:border-blue-900 mb-3">
+            <div className="bg-blue-500 text-white p-3 flex justify-between items-center">
+              <h3 className="font-bold">Voice Input History</h3>
+              <button 
+                onClick={() => {
+                  setVoiceInputHistory([]);
+                  localStorage.removeItem('voice_input_history');
+                }}
+                className="p-1 rounded hover:bg-blue-600 text-white text-xs"
+                title="Clear history"
+              >
+                Clear
+              </button>
+            </div>
+            <div className="overflow-y-auto max-h-64 p-3 space-y-3">
+              {voiceInputHistory.map((input, index) => (
+                <div key={index} className="border-b border-gray-200 dark:border-gray-700 pb-2 text-sm">
+                  <div className="font-medium text-gray-800 dark:text-gray-200 break-words">{input.text}</div>
+                  <div className="text-gray-500 dark:text-gray-400 text-xs mt-1">{formatTimestamp(input.timestamp)}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Test buttons for simulating voice input */}
       <div className="mb-3 flex justify-end gap-2">
         <button 
@@ -198,6 +279,15 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({ className }) =>
         >
           <Mic size={20} />
           <span className="sr-only">Test Business Profile</span>
+        </button>
+        
+        <button 
+          onClick={() => simulateVoiceInput("Business profile")}
+          className="p-2 rounded-full shadow-lg bg-pink-500 text-white hover:bg-pink-600 transition-colors"
+          title="Test 'Business profile' (lowercase p) keyword"
+        >
+          <Mic size={20} />
+          <span className="sr-only">Test Business profile</span>
         </button>
         
         <button 

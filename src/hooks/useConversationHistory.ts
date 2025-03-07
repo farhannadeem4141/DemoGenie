@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { searchVideosByKeyword, VideoSearchResult } from '@/services/video';
 import { supabase } from '@/integrations/supabase/client';
@@ -158,6 +157,7 @@ export function useConversationHistory() {
   
   const extractKeywords = (text: string): string[] => {
     const cleanText = text.replace(/[^\w\s]/g, '');
+    console.log("%c [KEYWORD LOG] ========== KEYWORD EXTRACTION ==========", "background: #4361ee; color: white; padding: 4px; border-radius: 4px; font-weight: bold;");
     console.log("%c [KEYWORD LOG] Original text for keyword extraction: " + text, "background: #4361ee; color: white; padding: 2px; border-radius: 4px;");
     console.log("%c [KEYWORD LOG] Cleaned text for keyword extraction: " + cleanText, "background: #4361ee; color: white; padding: 2px; border-radius: 4px;");
     
@@ -177,8 +177,11 @@ export function useConversationHistory() {
     phrases.forEach(phrase => {
       const lowerText = text.toLowerCase();
       const lowerPhrase = phrase.toLowerCase();
-      console.log(`%c [KEYWORD LOG] Checking for "${phrase}"... Original: ${text.includes(phrase)}, Case-insensitive: ${lowerText.includes(lowerPhrase)}`, 
-        "background: #4361ee; color: white; padding: 2px; border-radius: 4px;");
+      console.log(`%c [KEYWORD LOG] Checking for "${phrase}"...`, "background: #4361ee; color: white; padding: 2px; border-radius: 4px;");
+      console.log(`%c [KEYWORD LOG]   - Original case match: ${text.includes(phrase)}`, "background: #4361ee; color: white; padding: 2px; border-radius: 4px;");
+      console.log(`%c [KEYWORD LOG]   - Case-insensitive match: ${lowerText.includes(lowerPhrase)}`, "background: #4361ee; color: white; padding: 2px; border-radius: 4px;");
+      console.log(`%c [KEYWORD LOG]   - Exact match position: ${text.indexOf(phrase)}`, "background: #4361ee; color: white; padding: 2px; border-radius: 4px;");
+      console.log(`%c [KEYWORD LOG]   - Case-insensitive match position: ${lowerText.indexOf(lowerPhrase)}`, "background: #4361ee; color: white; padding: 2px; border-radius: 4px;");
     });
     
     // Use case-insensitive search for phrases
@@ -221,6 +224,7 @@ export function useConversationHistory() {
   };
   
   const addMessage = async (text: string) => {
+    console.log("%c [MESSAGE LOG] ========== NEW MESSAGE PROCESSING ==========", "background: #3a0ca3; color: white; padding: 4px; border-radius: 4px; font-weight: bold;");
     console.log("%c [MESSAGE LOG] Processing new message: " + text, "background: #3a0ca3; color: white; padding: 2px; border-radius: 4px;");
     const newMessage = { text, timestamp: Date.now() };
     setMessages(prev => [...prev, newMessage]);
@@ -244,6 +248,7 @@ export function useConversationHistory() {
       return;
     }
     
+    console.log("%c [SEARCH LOG] ========== DATABASE SEARCH ==========", "background: #f72585; color: white; padding: 4px; border-radius: 4px; font-weight: bold;");
     console.log("%c [SEARCH LOG] Searching for videos with keywords: " + keywords.join(", "), "background: #f72585; color: white; padding: 2px; border-radius: 4px;");
     
     const highPriorityKeywords = ["Quick Replies", "Quick Reply", "Message Templates", "Templates", "WhatsApp Business", "Business Profile"];
@@ -253,11 +258,19 @@ export function useConversationHistory() {
     let priorityKeyword = null;
     for (const kw of keywords) {
       for (const priority of highPriorityKeywords) {
-        const match = priority.toLowerCase() === kw.toLowerCase();
-        console.log(`%c [SEARCH LOG] Checking if "${kw}" matches priority "${priority}": ${match}`, 
+        const exactMatch = priority === kw;
+        const caseInsensitiveMatch = priority.toLowerCase() === kw.toLowerCase();
+        console.log(`%c [SEARCH LOG] Checking if "${kw}" matches priority "${priority}":`, 
           "background: #f72585; color: white; padding: 2px; border-radius: 4px;");
-        if (match) {
+        console.log(`%c [SEARCH LOG]   - Exact match: ${exactMatch}`, 
+          "background: #f72585; color: white; padding: 2px; border-radius: 4px;");
+        console.log(`%c [SEARCH LOG]   - Case-insensitive match: ${caseInsensitiveMatch}`, 
+          "background: #f72585; color: white; padding: 2px; border-radius: 4px;");
+        
+        if (caseInsensitiveMatch) {
           priorityKeyword = kw;
+          console.log(`%c [SEARCH LOG]   - MATCH FOUND! Using "${kw}" as priority keyword`, 
+            "background: #f72585; color: white; font-weight: bold; padding: 2px; border-radius: 4px;");
           break;
         }
       }
@@ -266,13 +279,17 @@ export function useConversationHistory() {
     
     if (priorityKeyword) {
       console.log("%c [SEARCH LOG] Found high priority keyword: " + priorityKeyword, "background: #b5179e; color: white; padding: 2px; border-radius: 4px;");
+      console.log("%c [SEARCH LOG] Querying database with keyword: " + priorityKeyword, "background: #b5179e; color: white; padding: 2px; border-radius: 4px;");
+      
       const searchResult = await searchVideosByKeyword(priorityKeyword);
       
       console.log("%c [SEARCH LOG] Priority keyword search result: ", "background: #b5179e; color: white; padding: 2px; border-radius: 4px;", {
         success: searchResult.success,
         dataLength: searchResult.data?.length || 0,
         errorReason: searchResult.errorReason,
-        searchDetails: searchResult.searchDetails
+        searchDetails: searchResult.searchDetails,
+        rawQuery: searchResult.rawQuery,
+        rawData: searchResult.data
       });
       
       if (searchResult.success && searchResult.data && searchResult.data.length > 0) {
@@ -290,6 +307,7 @@ export function useConversationHistory() {
         return;
       } else {
         console.log("%c [SEARCH LOG] No videos found for priority keyword: " + priorityKeyword, "background: #e63946; color: white; padding: 2px; border-radius: 4px;", searchResult);
+        console.log("%c [SEARCH LOG] Raw query used: " + searchResult.rawQuery, "background: #e63946; color: white; padding: 2px; border-radius: 4px;");
         addErrorLog(
           `No video found for priority keyword: ${priorityKeyword}`, 
           priorityKeyword, 
