@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useState } from 'react';
 import Header from '@/components/Header';
 import CTA from '@/components/CTA';
@@ -18,21 +17,19 @@ interface VapiSDK {
   }) => any;
 }
 
-// Extended interface to include proper types for Vapi
 interface ExtendedVapiSDK extends VapiSDK {
   run: (config: {
     apiKey: string;
     assistant: string;
     config: any;
-    // Add any other properties that might be needed
   }) => any;
 }
 
 declare global {
   interface Window {
     vapiSDK?: ExtendedVapiSDK;
-    vapiInstance?: any; // Make vapiInstance globally accessible
-    activateRecording?: () => void; // Add a function to activate recording globally
+    vapiInstance?: any;
+    activateRecording?: () => void;
   }
 }
 
@@ -44,18 +41,15 @@ const Index = () => {
   const [debugInfo, setDebugInfo] = useState<string[]>([]);
   const buttonRef = useRef<HTMLDivElement | null>(null);
 
-  // Add debug log function
   const addDebugLog = (message: string) => {
     console.log(`[DEBUG] ${message}`);
     setDebugInfo(prev => [message, ...prev].slice(0, 20));
   };
 
-  // Function to manually activate recording
   const activateRecording = () => {
     addDebugLog("Manual recording activation triggered");
     setIsRecordingActive(true);
     
-    // Dispatch recording started event
     window.dispatchEvent(new CustomEvent('recording_status_change', {
       detail: { isActive: true }
     }));
@@ -66,7 +60,6 @@ const Index = () => {
       duration: 3000,
     });
     
-    // Store an empty entry to initialize the voice input history if it doesn't exist
     try {
       const savedInputs = JSON.parse(localStorage.getItem('voice_input_history') || '[]');
       if (savedInputs.length === 0) {
@@ -78,7 +71,6 @@ const Index = () => {
     }
   };
 
-  // Make the activation function globally available
   useEffect(() => {
     window.activateRecording = activateRecording;
   }, []);
@@ -87,11 +79,9 @@ const Index = () => {
     console.log("Index component mounted");
     addDebugLog("Component mounted - initializing voice assistant");
     
-    // Initialize Vapi AI Assistant
-    const assistant = "607959b0-89a1-482a-ad03-66a7c86327e1"; // Assistant ID
-    const apiKey = "87657dc4-df36-4fa4-b292-0a60d40d43e4"; // Public Key
+    const assistant = "607959b0-89a1-482a-ad03-66a7c86327e1";
+    const apiKey = "87657dc4-df36-4fa4-b292-0a60d40d43e4";
     
-    // Position the button in the bottom right corner with some padding
     const buttonConfig = {
       button: {
         position: 'bottom-right',
@@ -119,12 +109,10 @@ const Index = () => {
       if (window.vapiSDK) {
         addDebugLog("Vapi SDK detected");
         
-        // Create a function to handle AI messages
         const handleMessage = (message: any) => {
           console.log("Message from Vapi:", message);
           addDebugLog(`Received AI message: ${JSON.stringify(message).substring(0, 100)}...`);
           
-          // Only proceed if we have text content
           const messageText = message.text || message.content;
           if (!messageText) {
             console.warn("Received empty message from Vapi");
@@ -135,7 +123,6 @@ const Index = () => {
           console.log("Dispatching vapi_message event with text:", messageText);
           addDebugLog(`Dispatching message event with text: ${messageText.substring(0, 50)}...`);
           
-          // Dispatch event with AI message for TranscriptListener to capture
           window.dispatchEvent(new CustomEvent('vapi_message', {
             detail: {
               type: 'ai_message',
@@ -143,7 +130,6 @@ const Index = () => {
             }
           }));
           
-          // Also show toast for visibility
           toast({
             title: "AI Assistant",
             description: messageText.substring(0, 100) + (messageText.length > 100 ? "..." : ""),
@@ -151,7 +137,6 @@ const Index = () => {
           });
         };
         
-        // Handle voice input and recording status
         const handleVoiceInput = (input: any) => {
           console.log("Voice input received:", input);
           addDebugLog(`Voice input received: ${input ? JSON.stringify(input).substring(0, 70) : 'empty'}...`);
@@ -161,7 +146,6 @@ const Index = () => {
             console.log("Voice transcript:", input.transcript);
             addDebugLog(`Transcript content: "${input.transcript.substring(0, 50)}..."`);
             
-            // Dispatch event with voice input for TranscriptListener to capture
             window.dispatchEvent(new CustomEvent('voice_input', {
               detail: {
                 type: 'voice_input',
@@ -169,7 +153,6 @@ const Index = () => {
               }
             }));
             
-            // Store in localStorage for debugging
             try {
               const savedInputs = JSON.parse(localStorage.getItem('voice_input_history') || '[]');
               const newVoiceInput = {
@@ -184,7 +167,6 @@ const Index = () => {
               addDebugLog(`Error saving to localStorage: ${e}`);
             }
             
-            // Show toast for voice input
             toast({
               title: "Voice Input",
               description: input.transcript.substring(0, 100) + (input.transcript.length > 100 ? "..." : ""),
@@ -193,19 +175,16 @@ const Index = () => {
           }
         };
         
-        // Handler for conversation state changes
         const handleStateChange = (state: any) => {
           console.log("Vapi state changed:", state);
           addDebugLog(`State change: ${state ? JSON.stringify(state).substring(0, 100) : 'null'}...`);
           
           if (state && state.status) {
-            // If conversation starts or ends
             if (state.status === 'connecting' || state.status === 'connected') {
               setIsRecordingActive(true);
               console.log("Voice recording activated");
               addDebugLog(`Recording ACTIVATED (status: ${state.status})`);
               
-              // Dispatch recording started event
               window.dispatchEvent(new CustomEvent('recording_status_change', {
                 detail: { isActive: true }
               }));
@@ -220,7 +199,6 @@ const Index = () => {
               console.log("Voice recording deactivated");
               addDebugLog(`Recording DEACTIVATED (status: ${state.status})`);
               
-              // Dispatch recording ended event
               window.dispatchEvent(new CustomEvent('recording_status_change', {
                 detail: { isActive: false }
               }));
@@ -234,16 +212,54 @@ const Index = () => {
           }
         };
 
-        // Improved function to track and handle Vapi button click
+        document.addEventListener('click', (e) => {
+          const target = e.target as HTMLElement;
+          
+          if (target && target.closest('[id^="vapi-support-btn"]')) {
+            addDebugLog("Vapi support button clicked directly!");
+            activateRecording();
+            
+            if (vapiInstanceRef.current && vapiInstanceRef.current.connect) {
+              try {
+                addDebugLog("Directly connecting vapiInstance after button click");
+                vapiInstanceRef.current.connect();
+              } catch (e) {
+                addDebugLog(`Error connecting vapiInstance: ${e}`);
+              }
+            }
+          }
+        }, true);
+
         const setupVapiButtonClickListener = () => {
-          // Create a MutationObserver to watch for the Vapi button being added to the DOM
           const observer = new MutationObserver((mutations) => {
             for (const mutation of mutations) {
               if (mutation.type === 'childList') {
                 const addedNodes = Array.from(mutation.addedNodes);
                 for (const node of addedNodes) {
                   if (node instanceof HTMLElement) {
-                    // Check for elements that might be or contain the Vapi button
+                    const vapiButton = node.querySelector('[id^="vapi-support-btn"]');
+                    if (vapiButton) {
+                      addDebugLog("Found Vapi support button by ID, attaching click handler");
+                      buttonRef.current = vapiButton as HTMLDivElement;
+                      
+                      vapiButton.addEventListener('click', () => {
+                        addDebugLog("Vapi support button clicked via observer!");
+                        activateRecording();
+                        
+                        if (vapiInstanceRef.current && vapiInstanceRef.current.connect) {
+                          try {
+                            addDebugLog("Connecting vapiInstance after button click");
+                            vapiInstanceRef.current.connect();
+                          } catch (e) {
+                            addDebugLog(`Error connecting vapiInstance: ${e}`);
+                          }
+                        }
+                      });
+                      
+                      observer.disconnect();
+                      break;
+                    }
+                    
                     const possibleButtons = [
                       ...Array.from(node.querySelectorAll('button')),
                       ...Array.from(node.querySelectorAll('div[role="button"]')),
@@ -251,7 +267,6 @@ const Index = () => {
                     ];
                     
                     for (const btn of possibleButtons) {
-                      // Check if this looks like the Vapi button
                       if (
                         (btn.textContent?.includes('AI Assistant') ||
                          (btn instanceof HTMLElement && btn.style.backgroundColor === 'rgb(37, 211, 102)') ||
@@ -260,16 +275,13 @@ const Index = () => {
                         addDebugLog("Found AI Assistant button, attaching click handler");
                         buttonRef.current = btn as HTMLDivElement;
                         
-                        // Add click event listener
                         btn.addEventListener('click', () => {
                           addDebugLog("AI Assistant button clicked!");
-                          // Immediately activate recording
                           activateRecording();
                           
-                          // Force connection if vapiInstance exists
                           if (vapiInstanceRef.current && vapiInstanceRef.current.connect) {
                             try {
-                              addDebugLog("Attempting to directly connect vapiInstance");
+                              addDebugLog("Connecting vapiInstance after button click");
                               vapiInstanceRef.current.connect();
                             } catch (e) {
                               addDebugLog(`Error connecting vapiInstance: ${e}`);
@@ -277,7 +289,6 @@ const Index = () => {
                           }
                         });
                         
-                        // No need to keep observing once we've found the button
                         observer.disconnect();
                         break;
                       }
@@ -288,41 +299,20 @@ const Index = () => {
             }
           });
 
-          // Start observing the document body
           observer.observe(document.body, { childList: true, subtree: true });
-          
-          // Also watch for click events on the document to catch any clicks on the button
-          document.addEventListener('click', (e) => {
-            const target = e.target as HTMLElement;
-            
-            // Check if the clicked element looks like the Vapi button
-            if (
-              target && 
-              (target.textContent?.includes('AI Assistant') || 
-               target.style.backgroundColor === 'rgb(37, 211, 102)' ||
-               target.getAttribute('style')?.includes('rgb(37, 211, 102)'))
-            ) {
-              addDebugLog("AI Assistant button clicked through global click handler!");
-              // Immediately activate recording
-              activateRecording();
-            }
-          });
         };
         
-        // Start watching for the Vapi button
         setupVapiButtonClickListener();
 
-        // Initialize Vapi with the config 
         const customConfig = {
           ...buttonConfig,
           onMessage: handleMessage,
-          onTranscript: handleVoiceInput, // Add handler for voice input transcripts
-          onStateChange: handleStateChange, // Add handler for conversation state
-          debug: true, // Enable debug mode to get more logs
-          autoStart: false, // Make sure autoStart is false to prevent automatic connection
+          onTranscript: handleVoiceInput,
+          onStateChange: handleStateChange,
+          debug: true,
+          autoStart: false
         };
 
-        // Dispatch an initial welcome message event to trigger the video display - ONLY ONCE
         if (!hasShownWelcomeMessage.current) {
           hasShownWelcomeMessage.current = true;
           setTimeout(() => {
@@ -345,7 +335,6 @@ const Index = () => {
           }, 1500);
         }
 
-        // Initialize Vapi with the config (only once)
         if (!vapiInstanceRef.current) {
           try {
             addDebugLog("Initializing Vapi instance");
@@ -354,7 +343,6 @@ const Index = () => {
               assistant: assistant,
               config: customConfig
             });
-            // Make it globally accessible for debugging
             window.vapiInstance = vapiInstanceRef.current;
             console.log("Vapi instance initialized", vapiInstanceRef.current);
             addDebugLog("Vapi instance initialized successfully");
@@ -380,7 +368,6 @@ const Index = () => {
     };
 
     return () => {
-      // Cleanup if needed
       if (vapiInstanceRef.current && vapiInstanceRef.current.destroy) {
         vapiInstanceRef.current.destroy();
       }
@@ -412,7 +399,6 @@ const Index = () => {
           Recording Inactive
         </div>
       )}
-      {/* Debug panel - fixed position */}
       <div className="fixed left-4 top-4 bg-black/80 text-white p-3 rounded-lg shadow-lg z-50 max-w-xs max-h-[300px] overflow-y-auto text-xs">
         <h4 className="font-bold mb-2">Debug Info</h4>
         <button 
