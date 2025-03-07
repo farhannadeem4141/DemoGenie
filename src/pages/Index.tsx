@@ -38,12 +38,10 @@ const Index = () => {
   const vapiInstanceRef = useRef<any>(null);
   const hasShownWelcomeMessage = useRef(false);
   const [isRecordingActive, setIsRecordingActive] = useState(false);
-  const [debugInfo, setDebugInfo] = useState<string[]>([]);
   const buttonRef = useRef<HTMLDivElement | null>(null);
 
   const addDebugLog = (message: string) => {
     console.log(`[DEBUG] ${message}`);
-    setDebugInfo(prev => [message, ...prev].slice(0, 20));
   };
 
   const activateRecording = () => {
@@ -120,23 +118,19 @@ const Index = () => {
     document.body.appendChild(script);
 
     const vapiButtonStateInterval = setInterval(() => {
-      // Check for button with id starting with vapi-support-btn
       const vapiSupportBtn = document.querySelector('[id^="vapi-support-btn"]');
       
       if (vapiSupportBtn) {
         if (vapiSupportBtn instanceof HTMLElement) {
-          // Check direct style properties
           const isHidden = vapiSupportBtn.style.display === 'none' || 
                           vapiSupportBtn.style.visibility === 'hidden' || 
                           vapiSupportBtn.classList.contains('inactive') ||
                           vapiSupportBtn.getAttribute('aria-hidden') === 'true';
           
-          // Check for idle class
           const hasIdleClass = vapiSupportBtn.classList.contains('vapi-btn-is-idle') || 
                               vapiSupportBtn.classList.contains('idle') ||
                               vapiSupportBtn.classList.contains('inactive');
           
-          // Log state for debugging
           if (hasIdleClass && isRecordingActive) {
             addDebugLog("Vapi button has idle class, deactivating recording");
           }
@@ -148,20 +142,18 @@ const Index = () => {
         }
       }
       
-      // Also check for any elements with vapi-btn-is-idle class
       const vapiIdleButtons = document.querySelectorAll('.vapi-btn-is-idle');
       if (vapiIdleButtons.length > 0 && isRecordingActive) {
         addDebugLog("Found elements with vapi-btn-is-idle class, deactivating recording");
         deactivateRecording();
       }
-    }, 1000); // Check more frequently
+    }, 1000);
 
     script.onload = function () {
       addDebugLog("Vapi script loaded");
       if (window.vapiSDK) {
         addDebugLog("Vapi SDK detected");
         
-        // Set up mutation observer to detect class changes on Vapi button
         const buttonClassObserver = new MutationObserver((mutations) => {
           mutations.forEach(mutation => {
             if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
@@ -178,7 +170,6 @@ const Index = () => {
           });
         });
         
-        // Function to observe vapi button once it's in the DOM
         const observeVapiButton = () => {
           const vapiButtons = document.querySelectorAll('[id^="vapi-support-btn"]');
           vapiButtons.forEach(button => {
@@ -187,7 +178,6 @@ const Index = () => {
           });
         };
         
-        // Check periodically for the button and start observing it
         const buttonObserverInterval = setInterval(() => {
           const vapiButtons = document.querySelectorAll('[id^="vapi-support-btn"]');
           if (vapiButtons.length > 0) {
@@ -487,7 +477,7 @@ const Index = () => {
         <SocialProof />
         <StepGuide />
         <FAQ />
-        <TranscriptListener isRecording={isRecordingActive} debugLogs={debugInfo} />
+        <TranscriptListener isRecording={isRecordingActive} />
       </main>
       <Footer />
       {isRecordingActive && (
@@ -495,26 +485,6 @@ const Index = () => {
           Recording Active
         </div>
       )}
-      {!isRecordingActive && (
-        <div className="fixed top-4 right-4 bg-gray-500 text-white px-4 py-2 rounded-full z-50">
-          Recording Inactive
-        </div>
-      )}
-      <div className="fixed left-4 top-4 bg-black/80 text-white p-3 rounded-lg shadow-lg z-50 max-w-xs max-h-[300px] overflow-y-auto text-xs">
-        <h4 className="font-bold mb-2">Debug Info</h4>
-        <button 
-          onClick={activateRecording}
-          className="bg-green-500 text-white px-2 py-1 rounded text-xs mb-2 w-full"
-        >
-          Activate Recording Manually
-        </button>
-        <ul className="space-y-1">
-          {debugInfo.map((log, i) => (
-            <li key={i} className="border-t border-gray-700 pt-1">{log}</li>
-          ))}
-          {debugInfo.length === 0 && <li>No debug logs yet...</li>}
-        </ul>
-      </div>
     </div>
   );
 };
