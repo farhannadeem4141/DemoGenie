@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useState } from 'react';
 import Header from '@/components/Header';
 import CTA from '@/components/CTA';
@@ -253,8 +254,8 @@ const Index = () => {
                       // Check if this looks like the Vapi button
                       if (
                         (btn.textContent?.includes('AI Assistant') ||
-                         btn.style.backgroundColor === 'rgb(37, 211, 102)' ||
-                         btn.getAttribute('style')?.includes('rgb(37, 211, 102)'))
+                         (btn instanceof HTMLElement && btn.style.backgroundColor === 'rgb(37, 211, 102)') ||
+                         (btn instanceof HTMLElement && btn.getAttribute('style')?.includes('rgb(37, 211, 102)')))
                       ) {
                         addDebugLog("Found AI Assistant button, attaching click handler");
                         buttonRef.current = btn as HTMLDivElement;
