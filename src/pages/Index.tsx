@@ -120,26 +120,81 @@ const Index = () => {
     document.body.appendChild(script);
 
     const vapiButtonStateInterval = setInterval(() => {
+      // Check for button with id starting with vapi-support-btn
       const vapiSupportBtn = document.querySelector('[id^="vapi-support-btn"]');
+      
       if (vapiSupportBtn) {
         if (vapiSupportBtn instanceof HTMLElement) {
+          // Check direct style properties
           const isHidden = vapiSupportBtn.style.display === 'none' || 
                           vapiSupportBtn.style.visibility === 'hidden' || 
                           vapiSupportBtn.classList.contains('inactive') ||
                           vapiSupportBtn.getAttribute('aria-hidden') === 'true';
           
-          if (isHidden && isRecordingActive) {
-            addDebugLog("Vapi button detected as inactive, deactivating recording");
+          // Check for idle class
+          const hasIdleClass = vapiSupportBtn.classList.contains('vapi-btn-is-idle') || 
+                              vapiSupportBtn.classList.contains('idle') ||
+                              vapiSupportBtn.classList.contains('inactive');
+          
+          // Log state for debugging
+          if (hasIdleClass && isRecordingActive) {
+            addDebugLog("Vapi button has idle class, deactivating recording");
+          }
+          
+          if ((isHidden || hasIdleClass) && isRecordingActive) {
+            addDebugLog("Vapi button detected as inactive or idle, deactivating recording");
             deactivateRecording();
           }
         }
       }
-    }, 2000);
+      
+      // Also check for any elements with vapi-btn-is-idle class
+      const vapiIdleButtons = document.querySelectorAll('.vapi-btn-is-idle');
+      if (vapiIdleButtons.length > 0 && isRecordingActive) {
+        addDebugLog("Found elements with vapi-btn-is-idle class, deactivating recording");
+        deactivateRecording();
+      }
+    }, 1000); // Check more frequently
 
     script.onload = function () {
       addDebugLog("Vapi script loaded");
       if (window.vapiSDK) {
         addDebugLog("Vapi SDK detected");
+        
+        // Set up mutation observer to detect class changes on Vapi button
+        const buttonClassObserver = new MutationObserver((mutations) => {
+          mutations.forEach(mutation => {
+            if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+              const target = mutation.target as HTMLElement;
+              const hasIdleClass = target.classList.contains('vapi-btn-is-idle') || 
+                                  target.classList.contains('idle') ||
+                                  target.classList.contains('inactive');
+              
+              if (hasIdleClass && isRecordingActive) {
+                addDebugLog("Vapi button class changed to idle state, deactivating recording");
+                deactivateRecording();
+              }
+            }
+          });
+        });
+        
+        // Function to observe vapi button once it's in the DOM
+        const observeVapiButton = () => {
+          const vapiButtons = document.querySelectorAll('[id^="vapi-support-btn"]');
+          vapiButtons.forEach(button => {
+            buttonClassObserver.observe(button, { attributes: true, attributeFilter: ['class'] });
+            addDebugLog("Started observing Vapi button class changes");
+          });
+        };
+        
+        // Check periodically for the button and start observing it
+        const buttonObserverInterval = setInterval(() => {
+          const vapiButtons = document.querySelectorAll('[id^="vapi-support-btn"]');
+          if (vapiButtons.length > 0) {
+            observeVapiButton();
+            clearInterval(buttonObserverInterval);
+          }
+        }, 1000);
         
         const handleMessage = (message: any) => {
           console.log("Message from Vapi:", message);

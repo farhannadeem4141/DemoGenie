@@ -19,7 +19,7 @@ export interface VapiMessage {
 }
 
 export interface VapiState {
-  status?: 'connecting' | 'connected' | 'disconnected' | 'error';
+  status?: 'connecting' | 'connected' | 'disconnected' | 'error' | 'idle';
   error?: any;
   details?: any;
 }
