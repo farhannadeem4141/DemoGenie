@@ -7,6 +7,10 @@ interface NativeSpeechRecorderProps {
   className?: string;
 }
 
+// Define the localStorage keys as constants to ensure consistency
+const NATIVE_VOICE_INPUT_KEY = 'native_voice_input_history';
+const VOICE_INPUT_KEY = 'voice_input_history';
+
 const NativeSpeechRecorder: React.FC<NativeSpeechRecorderProps> = () => {
   const {
     isListening,
@@ -44,7 +48,30 @@ const NativeSpeechRecorder: React.FC<NativeSpeechRecorderProps> = () => {
         vapiButton.addEventListener('click', () => {
           console.log("[NativeSpeech] Vapi button clicked, starting native recording");
           resetTranscript();
-          startListening();
+          
+          // Test that localStorage is accessible before attempting to start
+          try {
+            const testObj = { test: "accessibility check" };
+            localStorage.setItem('speech_recognition_test', JSON.stringify(testObj));
+            const retrieved = localStorage.getItem('speech_recognition_test');
+            if (!retrieved) {
+              throw new Error("Storage not accessible - could not retrieve test item");
+            }
+            const parsedTest = JSON.parse(retrieved);
+            if (!parsedTest || parsedTest.test !== "accessibility check") {
+              throw new Error("Storage test failed - retrieved value doesn't match saved value");
+            }
+            console.log("[NativeSpeech] localStorage access test passed, starting recognition");
+            startListening();
+          } catch (e) {
+            console.error("[NativeSpeech] localStorage test failed, cannot proceed with recording:", e);
+            toast({
+              variant: "destructive",
+              title: "Storage Access Error",
+              description: "Cannot save voice input - browser storage not accessible.",
+              duration: 3000,
+            });
+          }
         });
         
         // Listen for Vapi modal close actions
@@ -91,7 +118,7 @@ const NativeSpeechRecorder: React.FC<NativeSpeechRecorderProps> = () => {
         observer.disconnect();
       }
     };
-  }, [isListening, startListening, stopListening, resetTranscript]);
+  }, [isListening, startListening, stopListening, resetTranscript, toast]);
   
   // Set up Vapi button listener when component mounts
   useEffect(() => {
@@ -159,26 +186,44 @@ const NativeSpeechRecorder: React.FC<NativeSpeechRecorderProps> = () => {
       // Save to localStorage directly here for redundancy
       try {
         console.log("[NativeSpeech] Saving transcript to localStorage...");
-        const savedInputs = JSON.parse(localStorage.getItem('native_voice_input_history') || '[]');
+        
+        // Using the constant to ensure consistency
+        const nativeInputsStr = localStorage.getItem(NATIVE_VOICE_INPUT_KEY);
+        const savedInputs = nativeInputsStr ? JSON.parse(nativeInputsStr) : [];
+        
+        if (!Array.isArray(savedInputs)) {
+          console.error('[NativeSpeech] Existing input history is not an array, resetting');
+          localStorage.setItem(NATIVE_VOICE_INPUT_KEY, '[]');
+        }
+        
         const newInput = {
           text: transcript,
           timestamp: Date.now(),
           source: 'native'
         };
         
+        // Save to native voice input history key
         localStorage.setItem(
-          'native_voice_input_history', 
-          JSON.stringify([newInput, ...savedInputs].slice(0, 50))
+          NATIVE_VOICE_INPUT_KEY,
+          JSON.stringify([newInput, ...(Array.isArray(savedInputs) ? savedInputs : [])].slice(0, 50))
         );
         
         // Also save to the standard voice_input_history for compatibility
-        const standardInputs = JSON.parse(localStorage.getItem('voice_input_history') || '[]');
+        const standardInputsStr = localStorage.getItem(VOICE_INPUT_KEY);
+        const standardInputs = standardInputsStr ? JSON.parse(standardInputsStr) : [];
+        
+        if (!Array.isArray(standardInputs)) {
+          console.error('[NativeSpeech] Existing standard input history is not an array, resetting');
+          localStorage.setItem(VOICE_INPUT_KEY, '[]');
+        }
+        
         localStorage.setItem(
-          'voice_input_history',
-          JSON.stringify([newInput, ...standardInputs].slice(0, 50))
+          VOICE_INPUT_KEY,
+          JSON.stringify([newInput, ...(Array.isArray(standardInputs) ? standardInputs : [])].slice(0, 50))
         );
         
         console.log("[NativeSpeech] Successfully saved transcript to localStorage:", transcript);
+        console.log("[NativeSpeech] Keys in localStorage:", Object.keys(localStorage));
         
         // Dispatch custom event for the system to capture
         window.dispatchEvent(new CustomEvent('voice_input', {
@@ -193,7 +238,7 @@ const NativeSpeechRecorder: React.FC<NativeSpeechRecorderProps> = () => {
     }
   }, [transcript]);
   
-  // Test localStorage directly
+  // Test localStorage directly on component mount
   useEffect(() => {
     try {
       // Add a test entry to verify localStorage is working
@@ -206,6 +251,19 @@ const NativeSpeechRecorder: React.FC<NativeSpeechRecorderProps> = () => {
       localStorage.setItem('localStorage_test', JSON.stringify(testEntry));
       const retrieved = localStorage.getItem('localStorage_test');
       console.log("[NativeSpeech] localStorage test - can write and read:", !!retrieved);
+      
+      // Initialize empty arrays for both history types if they don't exist
+      if (!localStorage.getItem(NATIVE_VOICE_INPUT_KEY)) {
+        localStorage.setItem(NATIVE_VOICE_INPUT_KEY, '[]');
+        console.log("[NativeSpeech] Initialized empty native voice input history");
+      }
+      
+      if (!localStorage.getItem(VOICE_INPUT_KEY)) {
+        localStorage.setItem(VOICE_INPUT_KEY, '[]');
+        console.log("[NativeSpeech] Initialized empty standard voice input history");
+      }
+      
+      console.log("[NativeSpeech] Current localStorage keys:", Object.keys(localStorage));
     } catch (e) {
       console.error("[NativeSpeech] localStorage test failed:", e);
     }
