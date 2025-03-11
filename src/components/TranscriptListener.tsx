@@ -251,55 +251,38 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
     });
   };
 
-  const activateDemo = () => {
-    if (window.activateRecording) {
-      window.activateRecording();
-      toast({
-        title: "Demo Started",
-        description: "Ask a question about WhatsApp features!",
-        duration: 3000,
-      });
-    } else {
-      toast({
-        variant: "destructive",
-        title: "Demo Error",
-        description: "Sorry, the demo feature is currently unavailable.",
-        duration: 5000,
-      });
-    }
-  };
-
   return (
-    <div className={cn("fixed right-4 bottom-24 w-80 z-50 transition-all", className)}>
-      {recordingStatus && (
-        <div className="mb-3 flex items-center justify-center bg-red-500 text-white p-2 rounded-lg shadow-lg animate-pulse">
-          Recording Active
-        </div>
-      )}
+    <>
+      <div className={cn("fixed right-4 bottom-24 w-80 z-50 transition-all", className)}>
+        {recordingStatus && (
+          <div className="mb-3 flex items-center justify-center bg-red-500 text-white p-2 rounded-lg shadow-lg animate-pulse">
+            Recording Active
+          </div>
+        )}
 
-      <div 
-        onClick={activateDemo}
-        className="w-full mb-3 text-center text-whatsapp hover:text-whatsapp/90 font-medium py-2 cursor-pointer underline decoration-dotted"
-      >
-        Click for live demo
+        {currentVideo && currentVideo.video_url && (
+          <div className={cn(
+            "mb-4 transform transition-all duration-300 ease-in-out shadow-lg rounded-lg overflow-hidden",
+            isVideoVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
+          )}>
+            <VideoPlayer 
+              key={`video-${currentVideo.id}-${Date.now()}`}
+              videoUrl={currentVideo.video_url} 
+              videoName={currentVideo.video_name || `Video related to "${currentVideo.keyword}"`}
+              onEnded={() => console.log("Video playback ended")}
+              onError={handleVideoError}
+              onClose={handleVideoClose}
+            />
+          </div>
+        )}
       </div>
-
-      {currentVideo && currentVideo.video_url && (
-        <div className={cn(
-          "mb-4 transform transition-all duration-300 ease-in-out shadow-lg rounded-lg overflow-hidden",
-          isVideoVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
-        )}>
-          <VideoPlayer 
-            key={`video-${currentVideo.id}-${Date.now()}`}
-            videoUrl={currentVideo.video_url} 
-            videoName={currentVideo.video_name || `Video related to "${currentVideo.keyword}"`}
-            onEnded={() => console.log("Video playback ended")}
-            onError={handleVideoError}
-            onClose={handleVideoClose}
-          />
+      
+      <div className="fixed inset-0 flex items-center justify-center pointer-events-none z-40">
+        <div className="text-center text-whatsapp font-medium">
+          Click for live demo
         </div>
-      )}
-    </div>
+      </div>
+    </>
   );
 };
 
