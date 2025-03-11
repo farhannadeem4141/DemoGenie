@@ -18,14 +18,23 @@ const NativeSpeechRecorder: React.FC<NativeSpeechRecorderProps> = () => {
     resetTranscript
   } = useSpeechRecognition({
     continuous: true,
-    language: 'en-US'
+    language: 'en-US',
+    interimResults: true,
   });
   
   const { toast } = useToast();
   const isTrackingVapiButton = useRef(false);
+  const lastTranscriptRef = useRef('');
+  
+  // Update ref when transcript changes
+  useEffect(() => {
+    lastTranscriptRef.current = transcript;
+  }, [transcript]);
   
   const setupVapiButtonListener = useCallback(() => {
     if (isTrackingVapiButton.current) return;
+    
+    console.log("[NativeSpeech] Setting up Vapi button observer");
     
     const observer = new MutationObserver((mutations) => {
       const vapiButton = document.querySelector('[id^="vapi-support-btn"]');
@@ -76,7 +85,7 @@ const NativeSpeechRecorder: React.FC<NativeSpeechRecorderProps> = () => {
     
     observer.observe(document.body, { childList: true, subtree: true });
     
-    // Return a cleanup function that doesn't try to call disconnect on the observer if it's already gone
+    // Return a cleanup function
     return () => {
       if (observer) {
         observer.disconnect();
@@ -97,13 +106,24 @@ const NativeSpeechRecorder: React.FC<NativeSpeechRecorderProps> = () => {
       return;
     }
     
-    console.log("[NativeSpeech] Setting up Vapi button listener");
+    console.log("[NativeSpeech] Setting up initial Vapi button listener");
     const cleanup = setupVapiButtonListener();
+    
+    // Also check for Vapi button immediately
+    const vapiButton = document.querySelector('[id^="vapi-support-btn"]');
+    if (vapiButton) {
+      console.log("[NativeSpeech] Found Vapi button on initial check");
+      setupVapiButtonListener();
+    }
     
     // Poll for the Vapi button every second in case it's added after initial load
     const intervalId = setInterval(() => {
       if (!isTrackingVapiButton.current) {
-        setupVapiButtonListener();
+        const button = document.querySelector('[id^="vapi-support-btn"]');
+        if (button) {
+          console.log("[NativeSpeech] Found Vapi button during polling");
+          setupVapiButtonListener();
+        }
       }
     }, 1000);
     
@@ -133,11 +153,12 @@ const NativeSpeechRecorder: React.FC<NativeSpeechRecorderProps> = () => {
   
   // Save transcript when it changes
   useEffect(() => {
-    if (transcript && transcript.trim()) {
-      console.log("[NativeSpeech] New transcript:", transcript);
+    if (transcript && transcript.trim() && transcript !== lastTranscriptRef.current) {
+      console.log("[NativeSpeech] New transcript detected:", transcript);
       
       // Save to localStorage directly here for redundancy
       try {
+        console.log("[NativeSpeech] Saving transcript to localStorage...");
         const savedInputs = JSON.parse(localStorage.getItem('native_voice_input_history') || '[]');
         const newInput = {
           text: transcript,
@@ -157,20 +178,38 @@ const NativeSpeechRecorder: React.FC<NativeSpeechRecorderProps> = () => {
           JSON.stringify([newInput, ...standardInputs].slice(0, 50))
         );
         
-        console.log("[NativeSpeech] Saved transcript to localStorage:", transcript);
+        console.log("[NativeSpeech] Successfully saved transcript to localStorage:", transcript);
+        
+        // Dispatch custom event for the system to capture
+        window.dispatchEvent(new CustomEvent('voice_input', {
+          detail: {
+            type: 'voice_input',
+            text: transcript
+          }
+        }));
       } catch (e) {
         console.error('[NativeSpeech] Error saving transcript to localStorage:', e);
       }
-      
-      // Dispatch custom event for the system to capture
-      window.dispatchEvent(new CustomEvent('voice_input', {
-        detail: {
-          type: 'voice_input',
-          text: transcript
-        }
-      }));
     }
   }, [transcript]);
+  
+  // Test localStorage directly
+  useEffect(() => {
+    try {
+      // Add a test entry to verify localStorage is working
+      const testEntry = {
+        text: "Test entry to verify localStorage is working",
+        timestamp: Date.now(),
+        source: 'test'
+      };
+      
+      localStorage.setItem('localStorage_test', JSON.stringify(testEntry));
+      const retrieved = localStorage.getItem('localStorage_test');
+      console.log("[NativeSpeech] localStorage test - can write and read:", !!retrieved);
+    } catch (e) {
+      console.error("[NativeSpeech] localStorage test failed:", e);
+    }
+  }, []);
   
   // Component doesn't render anything visible
   return null;

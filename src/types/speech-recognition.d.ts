@@ -1,5 +1,16 @@
 
 // Type definitions for Web Speech API
+interface SpeechRecognitionResult {
+  isFinal: boolean;
+  [index: number]: { transcript: string; confidence: number };
+}
+
+interface SpeechRecognitionResultList {
+  length: number;
+  item(index: number): SpeechRecognitionResult;
+  [index: number]: SpeechRecognitionResult;
+}
+
 interface SpeechRecognitionEvent extends Event {
   resultIndex: number;
   results: SpeechRecognitionResultList;
@@ -32,11 +43,11 @@ interface SpeechRecognition extends EventTarget {
 }
 
 interface Window {
-  SpeechRecognition?: {
+  SpeechRecognition: {
     prototype: SpeechRecognition;
     new(): SpeechRecognition;
   };
-  webkitSpeechRecognition?: {
+  webkitSpeechRecognition: {
     prototype: SpeechRecognition;
     new(): SpeechRecognition;
   };
