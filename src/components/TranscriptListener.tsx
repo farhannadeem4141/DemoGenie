@@ -4,7 +4,6 @@ import { useConversationHistory } from '@/hooks/useConversationHistory';
 import VideoPlayer from './VideoPlayer';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
-import { X } from 'lucide-react';
 import { queryVideosWithCatalogTag } from '@/services/video';
 
 interface TranscriptListenerProps {
@@ -261,11 +260,6 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
     });
   };
 
-  const formatTimestamp = (timestamp: number) => {
-    const date = new Date(timestamp);
-    return `${date.toLocaleDateString()} ${date.toLocaleTimeString()}`;
-  };
-
   return (
     <div className={cn("fixed right-4 bottom-24 w-80 z-50 transition-all", className)}>
       {recordingStatus && (
@@ -273,43 +267,6 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
           Recording Active
         </div>
       )}
-
-      {/* Conversation History Panel */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden max-h-96 flex flex-col border border-blue-200 dark:border-blue-900 mb-3">
-        <div className="bg-blue-500 text-white p-3 flex justify-between items-center">
-          <h3 className="font-bold">Conversation History</h3>
-        </div>
-        <div className="overflow-y-auto max-h-64 p-3 space-y-3">
-          {messages.length === 0 ? (
-            <div className="text-center text-gray-500 dark:text-gray-400 py-4">
-              <p>No conversation recorded yet.</p>
-              <p className="text-xs mt-2">Click the green AI Assistant button to start a conversation.</p>
-            </div>
-          ) : (
-            messages.map((message, index) => (
-              <div key={index} className={cn(
-                "pb-2 text-sm border-b border-gray-200 dark:border-gray-700",
-                message.isSystem && "italic text-gray-500"
-              )}>
-                <div className={cn(
-                  "font-medium break-words",
-                  message.isAiMessage 
-                    ? "text-blue-600 dark:text-blue-400" 
-                    : message.isSystem 
-                      ? "text-gray-500 dark:text-gray-400" 
-                      : "text-gray-800 dark:text-gray-200"
-                )}>
-                  {message.isSystem ? "System: " : message.isAiMessage ? "AI: " : "You: "}
-                  {message.text}
-                </div>
-                <div className="text-gray-500 dark:text-gray-400 text-xs mt-1">
-                  {formatTimestamp(message.timestamp)}
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
 
       {currentVideo && currentVideo.video_url && (
         <div className={cn(

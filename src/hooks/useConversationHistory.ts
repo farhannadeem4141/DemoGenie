@@ -110,112 +110,23 @@ export function useConversationHistory() {
   }, [messages]);
 
   useEffect(() => {
-    const fetchInitialVideo = async () => {
-      try {
-        let { data, error } = await supabase
-          .from('Videos')
-          .select('*')
-          .eq('id', 42)
-          .maybeSingle();
-        
-        if (error || !data) {
-          console.log("Could not find video with ID 42, fetching first available video");
-          const { data: firstVideo, error: firstVideoError } = await supabase
-            .from('Videos')
-            .select('*')
-            .limit(1)
-            .maybeSingle();
-          
-          if (firstVideoError || !firstVideo) {
-            console.error('Error fetching any video:', firstVideoError);
-            
-            addErrorLog(
-              "Failed to fetch initial video", 
-              "initial_load", 
-              "Database error or no videos available"
-            );
-            
-            setCurrentVideo({
-              id: 0,
-              video_url: 'https://aalbdeydgpallvcmmsvq.supabase.co/storage/v1/object/sign/DemoGenie/What%20is%20WhatsApp.mp4?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1cmwiOiJEZW1vR2VuaWUvV2hhdCBpcyBXaGF0c0FwcC5tcDQiLCJpYXQiOjE3NDExMDI1OTEsImV4cCI6MTc3MjYzODU5MX0.285hWWaFnlZJ8wLkuYaAyf_sLH0wjDzxv4kgXsGEzO4',
-              video_name: 'What is WhatsApp',
-              keyword: 'WhatsApp'
-            });
-            
-            toast({
-              title: "Using fallback video",
-              description: "Could not fetch video data from database",
-              duration: 3000,
-            });
-            
-            return;
-          }
-          
-          data = firstVideo;
-        }
-        
-        if (data && data.video_url) {
-          const videoData: VideoMatch = {
-            id: data.id,
-            video_url: data.video_url,
-            video_name: data.video_name || 'WhatsApp Video',
-            keyword: data.video_tag1 || 'WhatsApp'
-          };
-          
-          console.log("Setting initial video:", videoData);
-          setCurrentVideo(videoData);
-          
-          toast({
-            title: "Video loaded",
-            description: `Now playing: ${videoData.video_name}`,
-            duration: 3000,
-          });
-        } else {
-          addErrorLog(
-            "Missing video URL in initial video", 
-            "initial_load", 
-            "Video record exists but URL is missing"
-          );
-          
-          setCurrentVideo({
-            id: 0,
-            video_url: 'https://aalbdeydgpallvcmmsvq.supabase.co/storage/v1/object/sign/DemoGenie/What%20is%20WhatsApp.mp4?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1cmwiOiJEZW1vR2VuaWUvV2hhdCBpcyBXaGF0c0FwcC5tcDQiLCJpYXQiOjE3NDExMDI1OTEsImV4cCI6MTc3MjYzODU5MX0.285hWWaFnlZJ8wLkuYaAyf_sLH0wjDzxv4kgXsGEzO4',
-            video_name: 'What is WhatsApp',
-            keyword: 'WhatsApp'
-          });
-          
-          toast({
-            title: "Using fallback video",
-            description: "Missing video URL in database",
-            duration: 3000,
-          });
-        }
-      } catch (error) {
-        console.error('Error fetching initial video:', error);
-        
-        addErrorLog(
-          "Exception during initial video fetch", 
-          "initial_load", 
-          JSON.stringify(error)
-        );
-        
-        setCurrentVideo({
-          id: 0,
-          video_url: 'https://aalbdeydgpallvcmmsvq.supabase.co/storage/v1/object/sign/DemoGenie/What%20is%20WhatsApp.mp4?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1cmwiOiJEZW1vR2VuaWUvV2hhdCBpcyBXaGF0c0FwcC5tcDQiLCJpYXQiOjE3NDExMDI1OTEsImV4cCI6MTc3MjYzODU5MX0.285hWWaFnlZJ8wLkuYaAyf_sLH0wjDzxv4kgXsGEzO4',
-          video_name: 'What is WhatsApp',
-          keyword: 'WhatsApp'
-        });
-        
-        toast({
-          variant: "destructive",
-          title: "Error loading video",
-          description: "Using fallback video due to an error",
-          duration: 3000,
-        });
-      }
+    // Set the specified initial video URL
+    const introVideo = {
+      id: 0,
+      video_url: 'https://aalbdeydgpallvcmmsvq.supabase.co/storage/v1/object/sign/DemoGenie/WhatsApp%20Intro%20By%20Sophie.mp4?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1cmwiOiJEZW1vR2VuaWUvV2hhdHNBcHAgSW50cm8gQnkgU29waGllLm1wNCIsImlhdCI6MTc0MTEwMjcwOSwiZXhwIjoxNzcyNjM4NzA5fQ.rvjigS14YSrlPd2VqEDpQHHQlCsOSivOegXkciDnnEA',
+      video_name: 'WhatsApp Intro By Sophie',
+      keyword: 'WhatsApp'
     };
     
-    fetchInitialVideo();
+    console.log("Setting initial intro video:", introVideo);
+    setCurrentVideo(introVideo);
+    
+    toast({
+      title: "Video loaded",
+      description: `Now playing: ${introVideo.video_name}`,
+      duration: 3000,
+    });
+    
   }, [toast]);
   
   const extractKeywords = (text: string): string[] => {
