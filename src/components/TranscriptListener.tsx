@@ -278,8 +278,8 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
         )}
       </div>
       
-      <div className="inset-0 flex items-center justify-center pointer-events-none z-40" style={{ paddingTop: '200px' }}>
-        <div className="text-center text-whatsapp font-bold">
+      <div className="fixed bottom-32 left-0 right-0 flex justify-center items-center pointer-events-none z-40">
+        <div className="text-center text-whatsapp font-bold px-4 py-2 bg-white/80 rounded-lg shadow-sm">
           Click for live demo
         </div>
       </div>
