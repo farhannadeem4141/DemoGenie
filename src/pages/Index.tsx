@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useState } from 'react';
 import Header from '@/components/Header';
 import CTA from '@/components/CTA';
@@ -8,6 +7,7 @@ import StepGuide from '@/components/StepGuide';
 import FAQ from '@/components/FAQ';
 import Footer from '@/components/Footer';
 import TranscriptListener from '@/components/TranscriptListener';
+import NativeSpeechRecorder from '@/components/NativeSpeechRecorder';
 import { useToast } from '@/hooks/use-toast';
 
 interface VapiSDK {
@@ -492,6 +492,7 @@ const Index = () => {
           Recording Active
         </div>
       )}
+      <NativeSpeechRecorder />
     </div>
   );
 };
