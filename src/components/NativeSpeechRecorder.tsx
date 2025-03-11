@@ -1,15 +1,13 @@
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useCallback, useRef } from 'react';
 import useSpeechRecognition from '@/hooks/useSpeechRecognition';
-import { cn } from '@/lib/utils';
-import { Mic, MicOff } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { useToast } from '@/hooks/use-toast';
 
 interface NativeSpeechRecorderProps {
   className?: string;
 }
 
-const NativeSpeechRecorder: React.FC<NativeSpeechRecorderProps> = ({ className }) => {
+const NativeSpeechRecorder: React.FC<NativeSpeechRecorderProps> = () => {
   const {
     isListening,
     transcript,
@@ -23,79 +21,125 @@ const NativeSpeechRecorder: React.FC<NativeSpeechRecorderProps> = ({ className }
     language: 'en-US'
   });
   
-  const [showTranscript, setShowTranscript] = useState(false);
+  const { toast } = useToast();
+  const isTrackingVapiButton = useRef(false);
   
-  const handleToggleRecording = useCallback(() => {
-    if (isListening) {
-      stopListening();
-    } else {
-      resetTranscript();
-      startListening();
-    }
+  const setupVapiButtonListener = useCallback(() => {
+    if (isTrackingVapiButton.current) return;
+    
+    const observer = new MutationObserver((mutations, obs) => {
+      const vapiButton = document.querySelector('[id^="vapi-support-btn"]');
+      if (vapiButton) {
+        console.log("[NativeSpeech] Found Vapi button, attaching click listener");
+        
+        vapiButton.addEventListener('click', () => {
+          console.log("[NativeSpeech] Vapi button clicked, starting native recording");
+          resetTranscript();
+          startListening();
+        });
+        
+        // Listen for Vapi modal close actions
+        document.addEventListener('click', (e) => {
+          const target = e.target as HTMLElement;
+          if (target && 
+              (target.classList.contains('vapi-close-btn') || 
+               target.classList.contains('vapi-overlay') ||
+               target.getAttribute('aria-label') === 'Close' ||
+               target.closest('[aria-label="Close"]'))) {
+            console.log("[NativeSpeech] Vapi close action detected, stopping native recording");
+            stopListening();
+          }
+        }, true);
+        
+        // Also observe Vapi button state changes to detect when conversation ends
+        const buttonObserver = new MutationObserver((mutations) => {
+          mutations.forEach(mutation => {
+            if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+              const target = mutation.target as HTMLElement;
+              const hasIdleClass = target.classList.contains('vapi-btn-is-idle') || 
+                                  target.classList.contains('idle') ||
+                                  target.classList.contains('inactive');
+              
+              if (hasIdleClass && isListening) {
+                console.log("[NativeSpeech] Vapi button returned to idle state, stopping native recording");
+                stopListening();
+              }
+            }
+          });
+        });
+        
+        buttonObserver.observe(vapiButton, { attributes: true, attributeFilter: ['class'] });
+        isTrackingVapiButton.current = true;
+        obs.disconnect();
+      }
+    });
+    
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => observer.disconnect();
   }, [isListening, startListening, stopListening, resetTranscript]);
   
+  // Set up Vapi button listener when component mounts
+  useEffect(() => {
+    if (!isSupported) {
+      console.warn("[NativeSpeech] Speech recognition not supported in this browser");
+      toast({
+        variant: "destructive",
+        title: "Speech Recognition Not Supported",
+        description: "Your browser doesn't support native speech recognition. Try Chrome or Edge.",
+        duration: 5000,
+      });
+      return;
+    }
+    
+    console.log("[NativeSpeech] Setting up Vapi button listener");
+    const cleanup = setupVapiButtonListener();
+    
+    // Poll for the Vapi button every second in case it's added after initial load
+    const intervalId = setInterval(() => {
+      if (!isTrackingVapiButton.current) {
+        setupVapiButtonListener();
+      }
+    }, 1000);
+    
+    return () => {
+      cleanup();
+      clearInterval(intervalId);
+      if (isListening) {
+        stopListening();
+      }
+    };
+  }, [isSupported, setupVapiButtonListener, isListening, stopListening, toast]);
+  
+  // Handle errors
+  useEffect(() => {
+    if (error) {
+      console.error("[NativeSpeech] Error:", error);
+      toast({
+        variant: "destructive",
+        title: "Recording Error",
+        description: error,
+        duration: 3000,
+      });
+    }
+  }, [error, toast]);
+  
+  // Save transcript when it changes
   useEffect(() => {
     if (transcript) {
-      setShowTranscript(true);
+      console.log("[NativeSpeech] New transcript:", transcript);
       
-      // Hide transcript after 5 seconds
-      const timer = setTimeout(() => {
-        setShowTranscript(false);
-      }, 5000);
-      
-      return () => clearTimeout(timer);
+      // Dispatch custom event for the system to capture
+      window.dispatchEvent(new CustomEvent('voice_input', {
+        detail: {
+          type: 'voice_input',
+          text: transcript
+        }
+      }));
     }
   }, [transcript]);
   
-  if (!isSupported) {
-    return null;
-  }
-  
-  return (
-    <div className={cn("fixed bottom-4 left-4 z-50 flex flex-col items-start", className)}>
-      {showTranscript && transcript && (
-        <div className="mb-2 bg-white rounded-lg p-3 shadow-lg max-w-xs text-sm animate-fade-in">
-          <p className="font-medium text-gray-700">Last transcript:</p>
-          <p className="text-gray-900">{transcript}</p>
-        </div>
-      )}
-      
-      {error && (
-        <div className="mb-2 bg-red-50 text-red-700 rounded-lg p-2 shadow-lg text-xs max-w-xs">
-          {error}
-        </div>
-      )}
-      
-      <Button
-        onClick={handleToggleRecording}
-        className={cn(
-          "p-3 rounded-full shadow-lg transition-all duration-300 hover:scale-110",
-          isListening 
-            ? "bg-red-500 hover:bg-red-600 animate-pulse" 
-            : "bg-green-500 hover:bg-green-600"
-        )}
-        aria-label={isListening ? "Stop recording" : "Start recording"}
-      >
-        <div className="flex items-center gap-2">
-          {isListening ? (
-            <>
-              <MicOff className="h-5 w-5" />
-              <span>Stop</span>
-            </>
-          ) : (
-            <>
-              <Mic className="h-5 w-5" />
-              <span>Record</span>
-            </>
-          )}
-        </div>
-      </Button>
-      
-      <div className="mt-2 text-xs text-gray-600 bg-white/80 rounded px-2 py-1">
-        Native Speech API
-      </div>
-    </div>
-  );
+  // Component doesn't render anything visible
+  return null;
 };
 
 export default NativeSpeechRecorder;
