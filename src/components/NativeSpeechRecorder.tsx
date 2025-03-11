@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import useSpeechRecognition from '@/hooks/useSpeechRecognition';
 import { cn } from '@/lib/utils';
-import { Mic, MicOff, Volume2 } from 'lucide-react';
+import { Mic, MicOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 interface NativeSpeechRecorderProps {

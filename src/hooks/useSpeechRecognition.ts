@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -19,30 +18,18 @@ interface UseSpeechRecognitionReturn {
   resetTranscript: () => void;
 }
 
-// Define the SpeechRecognition type based on browser implementations
-interface SpeechRecognitionEvent extends Event {
-  resultIndex: number;
-  results: SpeechRecognitionResultList;
-}
-
-interface SpeechRecognitionErrorEvent extends Event {
-  error: string;
-  message: string;
-}
-
 const useSpeechRecognition = (options: SpeechRecognitionOptions = {}): UseSpeechRecognitionReturn => {
   const { toast } = useToast();
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const recognitionRef = useRef<any>(null);
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
   const isRecognitionSupported = useRef<boolean>(false);
 
   // Check if speech recognition is supported
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      window.SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      isRecognitionSupported.current = !!window.SpeechRecognition;
+      isRecognitionSupported.current = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
       
       if (!isRecognitionSupported.current) {
         console.error('Speech recognition not supported in this browser');
@@ -70,8 +57,14 @@ const useSpeechRecognition = (options: SpeechRecognitionOptions = {}): UseSpeech
     }
     
     try {
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      recognitionRef.current = new SpeechRecognition();
+      // Use type assertion here to handle the Speech Recognition constructor
+      const SpeechRecognitionConstructor = window.SpeechRecognition || window.webkitSpeechRecognition;
+      
+      if (!SpeechRecognitionConstructor) {
+        throw new Error('Speech recognition not available');
+      }
+      
+      recognitionRef.current = new SpeechRecognitionConstructor();
       
       // Apply options
       recognitionRef.current.continuous = options.continuous ?? true;
@@ -139,9 +132,9 @@ const useSpeechRecognition = (options: SpeechRecognitionOptions = {}): UseSpeech
       };
       
       recognitionRef.current.start();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to start speech recognition:', err);
-      setError(`Failed to start: ${err}`);
+      setError(`Failed to start: ${err.message || err}`);
       setIsListening(false);
       toast({
         variant: "destructive",
