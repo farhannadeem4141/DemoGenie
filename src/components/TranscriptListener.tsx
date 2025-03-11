@@ -5,6 +5,7 @@ import VideoPlayer from './VideoPlayer';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { queryVideosWithCatalogTag } from '@/services/video';
+import { Button } from './ui/button';
 
 interface TranscriptListenerProps {
   className?: string;
@@ -260,6 +261,24 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
     });
   };
 
+  const activateDemo = () => {
+    if (window.activateRecording) {
+      window.activateRecording();
+      toast({
+        title: "Demo Started",
+        description: "Ask a question about WhatsApp features!",
+        duration: 3000,
+      });
+    } else {
+      toast({
+        variant: "destructive",
+        title: "Demo Error",
+        description: "Sorry, the demo feature is currently unavailable.",
+        duration: 5000,
+      });
+    }
+  };
+
   return (
     <div className={cn("fixed right-4 bottom-24 w-80 z-50 transition-all", className)}>
       {recordingStatus && (
@@ -267,6 +286,13 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
           Recording Active
         </div>
       )}
+
+      <Button 
+        onClick={activateDemo}
+        className="w-full mb-3 bg-whatsapp hover:bg-whatsapp/90 text-white font-medium py-2 rounded-lg shadow-lg"
+      >
+        Click for live demo
+      </Button>
 
       {currentVideo && currentVideo.video_url && (
         <div className={cn(
