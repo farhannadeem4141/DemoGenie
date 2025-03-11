@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { useConversationHistory } from '@/hooks/useConversationHistory';
 import VideoPlayer from './VideoPlayer';
@@ -278,7 +277,7 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
         )}
       </div>
       
-      <div className="absolute top-[480px] left-0 right-0 flex justify-center items-center pointer-events-none z-40">
+      <div className="absolute top-[520px] left-0 right-0 flex justify-center items-center pointer-events-none z-40">
         <div className="text-center text-whatsapp font-bold px-4 py-2 bg-white/80 rounded-lg shadow-sm">
           Click for live demo
         </div>
