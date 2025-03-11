@@ -1,11 +1,9 @@
-
 import React, { useEffect, useState } from 'react';
 import { useConversationHistory } from '@/hooks/useConversationHistory';
 import VideoPlayer from './VideoPlayer';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { queryVideosWithCatalogTag } from '@/services/video';
-import { Button } from './ui/button';
 
 interface TranscriptListenerProps {
   className?: string;
@@ -41,7 +39,6 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
   }, [isRecording]);
 
   useEffect(() => {
-    // Check for any existing voice inputs in localStorage immediately on mount
     const checkForExistingInputs = () => {
       try {
         const voiceInputs = localStorage.getItem('voice_input_history');
@@ -50,11 +47,9 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
           console.log("Found existing voice inputs:", parsedInputs.length);
           
           if (Array.isArray(parsedInputs) && parsedInputs.length > 0) {
-            // Process voice inputs that may not have been added to conversation history
             parsedInputs.forEach(input => {
               if (input && input.text) {
                 console.log("Processing existing voice input:", input.text);
-                // We'll let useConversationHistory handle duplicate filtering
                 addMessage({
                   text: input.text,
                   isAiMessage: false,
@@ -73,7 +68,6 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
     
     checkForExistingInputs();
     
-    // Continue with regular event listeners
     const checkForActivationButtons = () => {
       if (window.activateRecording) {
         console.log("Found global activateRecording function");
@@ -118,7 +112,6 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
       if (event.detail && event.detail.type === 'ai_message' && event.detail.text) {
         console.log("Received AI message:", event.detail.text);
         
-        // Add AI messages to conversation history
         addMessage({
           text: event.detail.text,
           isAiMessage: true,
@@ -138,14 +131,12 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
         const inputText = event.detail.text;
         console.log("Voice input captured:", inputText);
         
-        // Add user voice input to conversation history
         addMessage({
           text: inputText,
           isAiMessage: false,
           timestamp: Date.now()
         });
         
-        // Ensure voice input is saved to localStorage
         try {
           const savedInputs = JSON.parse(localStorage.getItem('voice_input_history') || '[]');
           const newInput = {
@@ -201,7 +192,6 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
         console.log("Recording status changed to: " + (event.detail.isActive ? "ACTIVE" : "INACTIVE"));
         setRecordingStatus(event.detail.isActive);
         
-        // Log recording status changes to conversation history
         if (event.detail.isActive) {
           addMessage({
             text: "Recording started",
@@ -287,12 +277,12 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
         </div>
       )}
 
-      <Button 
+      <div 
         onClick={activateDemo}
-        className="w-full mb-3 bg-whatsapp hover:bg-whatsapp/90 text-white font-medium py-2 rounded-lg shadow-lg"
+        className="w-full mb-3 text-center text-whatsapp hover:text-whatsapp/90 font-medium py-2 cursor-pointer underline decoration-dotted"
       >
         Click for live demo
-      </Button>
+      </div>
 
       {currentVideo && currentVideo.video_url && (
         <div className={cn(
