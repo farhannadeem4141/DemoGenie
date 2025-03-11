@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { useConversationHistory } from '@/hooks/useConversationHistory';
 import VideoPlayer from './VideoPlayer';
@@ -277,8 +278,8 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
         )}
       </div>
       
-      <div className="fixed inset-0 flex items-center justify-center pointer-events-none z-40">
-        <div className="text-center text-whatsapp font-medium">
+      <div className="fixed inset-0 flex items-center justify-center pointer-events-none z-40" style={{ paddingTop: '100px' }}>
+        <div className="text-center text-whatsapp font-bold">
           Click for live demo
         </div>
       </div>
