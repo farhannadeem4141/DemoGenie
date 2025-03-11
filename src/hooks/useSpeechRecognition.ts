@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -29,7 +30,10 @@ const useSpeechRecognition = (options: SpeechRecognitionOptions = {}): UseSpeech
   // Check if speech recognition is supported
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      isRecognitionSupported.current = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+      isRecognitionSupported.current = !!(
+        (window as any).SpeechRecognition || 
+        (window as any).webkitSpeechRecognition
+      );
       
       if (!isRecognitionSupported.current) {
         console.error('Speech recognition not supported in this browser');
@@ -43,6 +47,35 @@ const useSpeechRecognition = (options: SpeechRecognitionOptions = {}): UseSpeech
       }
     }
   }, [toast]);
+
+  const saveTranscriptToLocalStorage = useCallback((text: string) => {
+    if (!text.trim()) return;
+    
+    try {
+      const savedInputs = JSON.parse(localStorage.getItem('native_voice_input_history') || '[]');
+      const newInput = {
+        text,
+        timestamp: Date.now(),
+        source: 'native' // Mark this as coming from the native API, not Vapi
+      };
+      
+      localStorage.setItem(
+        'native_voice_input_history', 
+        JSON.stringify([newInput, ...savedInputs].slice(0, 50))
+      );
+      
+      // Also save to the standard voice_input_history for compatibility
+      const standardInputs = JSON.parse(localStorage.getItem('voice_input_history') || '[]');
+      localStorage.setItem(
+        'voice_input_history',
+        JSON.stringify([newInput, ...standardInputs].slice(0, 50))
+      );
+      
+      console.log("Saved native voice input to localStorage:", text);
+    } catch (e) {
+      console.error('Error saving native voice input to localStorage:', e);
+    }
+  }, []);
 
   const startListening = useCallback(() => {
     setError(null);
@@ -58,7 +91,8 @@ const useSpeechRecognition = (options: SpeechRecognitionOptions = {}): UseSpeech
     
     try {
       // Use type assertion here to handle the Speech Recognition constructor
-      const SpeechRecognitionConstructor = window.SpeechRecognition || window.webkitSpeechRecognition;
+      const SpeechRecognitionConstructor = (window as any).SpeechRecognition || 
+                                          (window as any).webkitSpeechRecognition;
       
       if (!SpeechRecognitionConstructor) {
         throw new Error('Speech recognition not available');
@@ -98,6 +132,9 @@ const useSpeechRecognition = (options: SpeechRecognitionOptions = {}): UseSpeech
             const newTranscript = prev ? `${prev} ${currentTranscript}` : currentTranscript;
             return newTranscript;
           });
+          
+          // Save transcript immediately when we get results
+          saveTranscriptToLocalStorage(currentTranscript);
         }
       };
       
@@ -114,14 +151,16 @@ const useSpeechRecognition = (options: SpeechRecognitionOptions = {}): UseSpeech
       
       recognitionRef.current.onend = () => {
         console.log('Speech recognition ended');
-        // Only set isListening to false if we're not immediately restarting
         setIsListening(false);
         
-        // If not empty, save the transcript
+        toast({
+          title: "Recording Stopped",
+          description: "Voice recording has been stopped.",
+          duration: 3000,
+        });
+        
+        // If we have a transcript, make sure it gets dispatched
         if (transcript.trim()) {
-          saveTranscriptToLocalStorage(transcript);
-          
-          // Dispatch custom event for the existing system to capture
           window.dispatchEvent(new CustomEvent('voice_input', {
             detail: {
               type: 'voice_input',
@@ -143,7 +182,7 @@ const useSpeechRecognition = (options: SpeechRecognitionOptions = {}): UseSpeech
         duration: 3000,
       });
     }
-  }, [options, transcript, toast]);
+  }, [options, transcript, toast, saveTranscriptToLocalStorage]);
 
   const stopListening = useCallback(() => {
     if (recognitionRef.current) {
@@ -160,35 +199,6 @@ const useSpeechRecognition = (options: SpeechRecognitionOptions = {}): UseSpeech
 
   const resetTranscript = useCallback(() => {
     setTranscript('');
-  }, []);
-
-  const saveTranscriptToLocalStorage = useCallback((text: string) => {
-    if (!text.trim()) return;
-    
-    try {
-      const savedInputs = JSON.parse(localStorage.getItem('native_voice_input_history') || '[]');
-      const newInput = {
-        text,
-        timestamp: Date.now(),
-        source: 'native' // Mark this as coming from the native API, not Vapi
-      };
-      
-      localStorage.setItem(
-        'native_voice_input_history', 
-        JSON.stringify([newInput, ...savedInputs].slice(0, 50))
-      );
-      
-      // Also save to the standard voice_input_history for compatibility
-      const standardInputs = JSON.parse(localStorage.getItem('voice_input_history') || '[]');
-      localStorage.setItem(
-        'voice_input_history',
-        JSON.stringify([newInput, ...standardInputs].slice(0, 50))
-      );
-      
-      console.log("Saved native voice input to localStorage:", text);
-    } catch (e) {
-      console.error('Error saving native voice input to localStorage:', e);
-    }
   }, []);
 
   // Clean up on unmount

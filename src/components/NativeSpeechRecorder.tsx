@@ -27,7 +27,7 @@ const NativeSpeechRecorder: React.FC<NativeSpeechRecorderProps> = () => {
   const setupVapiButtonListener = useCallback(() => {
     if (isTrackingVapiButton.current) return;
     
-    const observer = new MutationObserver((mutations, obs) => {
+    const observer = new MutationObserver((mutations) => {
       const vapiButton = document.querySelector('[id^="vapi-support-btn"]');
       if (vapiButton) {
         console.log("[NativeSpeech] Found Vapi button, attaching click listener");
@@ -70,12 +70,18 @@ const NativeSpeechRecorder: React.FC<NativeSpeechRecorderProps> = () => {
         
         buttonObserver.observe(vapiButton, { attributes: true, attributeFilter: ['class'] });
         isTrackingVapiButton.current = true;
-        obs.disconnect();
+        observer.disconnect();
       }
     });
     
     observer.observe(document.body, { childList: true, subtree: true });
-    return () => observer.disconnect();
+    
+    // Return a cleanup function that doesn't try to call disconnect on the observer if it's already gone
+    return () => {
+      if (observer) {
+        observer.disconnect();
+      }
+    };
   }, [isListening, startListening, stopListening, resetTranscript]);
   
   // Set up Vapi button listener when component mounts
@@ -102,7 +108,9 @@ const NativeSpeechRecorder: React.FC<NativeSpeechRecorderProps> = () => {
     }, 1000);
     
     return () => {
-      cleanup();
+      if (typeof cleanup === 'function') {
+        cleanup();
+      }
       clearInterval(intervalId);
       if (isListening) {
         stopListening();
@@ -125,8 +133,34 @@ const NativeSpeechRecorder: React.FC<NativeSpeechRecorderProps> = () => {
   
   // Save transcript when it changes
   useEffect(() => {
-    if (transcript) {
+    if (transcript && transcript.trim()) {
       console.log("[NativeSpeech] New transcript:", transcript);
+      
+      // Save to localStorage directly here for redundancy
+      try {
+        const savedInputs = JSON.parse(localStorage.getItem('native_voice_input_history') || '[]');
+        const newInput = {
+          text: transcript,
+          timestamp: Date.now(),
+          source: 'native'
+        };
+        
+        localStorage.setItem(
+          'native_voice_input_history', 
+          JSON.stringify([newInput, ...savedInputs].slice(0, 50))
+        );
+        
+        // Also save to the standard voice_input_history for compatibility
+        const standardInputs = JSON.parse(localStorage.getItem('voice_input_history') || '[]');
+        localStorage.setItem(
+          'voice_input_history',
+          JSON.stringify([newInput, ...standardInputs].slice(0, 50))
+        );
+        
+        console.log("[NativeSpeech] Saved transcript to localStorage:", transcript);
+      } catch (e) {
+        console.error('[NativeSpeech] Error saving transcript to localStorage:', e);
+      }
       
       // Dispatch custom event for the system to capture
       window.dispatchEvent(new CustomEvent('voice_input', {

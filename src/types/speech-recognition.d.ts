@@ -32,12 +32,12 @@ interface SpeechRecognition extends EventTarget {
 }
 
 interface Window {
-  SpeechRecognition: {
+  SpeechRecognition?: {
     prototype: SpeechRecognition;
     new(): SpeechRecognition;
-  } | undefined;
-  webkitSpeechRecognition: {
+  };
+  webkitSpeechRecognition?: {
     prototype: SpeechRecognition;
     new(): SpeechRecognition;
-  } | undefined;
+  };
 }
