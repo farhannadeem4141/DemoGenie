@@ -32,7 +32,41 @@ export function useConversationHistory() {
   const { toast } = useToast();
   const initialVideoLoadedRef = useRef(false);
   const lastVideoRef = useRef<VideoMatch | null>(null);
+  const toastTimeoutRef = useRef<NodeJS.Timeout>();
   
+  const setCurrentVideoWithTracking = (video: VideoMatch | null) => {
+    if (video === null) {
+      lastVideoRef.current = null;
+      setCurrentVideo(null);
+      return;
+    }
+    
+    // Prevent setting the same video multiple times
+    if (lastVideoRef.current?.id === video.id && 
+        lastVideoRef.current?.video_url === video.video_url) {
+      console.log("Ignoring duplicate video set request");
+      return;
+    }
+    
+    console.log("Setting new video:", video.video_name);
+    lastVideoRef.current = video;
+    setCurrentVideo(video);
+    
+    // Clear any existing toast timeout
+    if (toastTimeoutRef.current) {
+      clearTimeout(toastTimeoutRef.current);
+    }
+    
+    // Set a new toast with a timeout
+    toastTimeoutRef.current = setTimeout(() => {
+      toast({
+        title: "Video found",
+        description: `Now playing: ${video.video_name || video.keyword}`,
+        duration: 3000,
+      });
+    }, 500);
+  };
+
   useEffect(() => {
     const loadConversationHistory = () => {
       const savedHistory = localStorage.getItem('conversation_history');
@@ -122,36 +156,11 @@ export function useConversationHistory() {
         keyword: 'WhatsApp'
       };
       
-      console.log("Setting initial intro video:", introVideo);
+      console.log("Setting initial intro video");
       lastVideoRef.current = introVideo;
       setCurrentVideo(introVideo);
-      
-      toast({
-        title: "Video loaded",
-        description: `Now playing: ${introVideo.video_name}`,
-        duration: 3000,
-      });
     }
   }, [toast, currentVideo]);
-  
-  const setCurrentVideoWithTracking = (video: VideoMatch | null) => {
-    if (video === null) {
-      lastVideoRef.current = null;
-      setCurrentVideo(null);
-      return;
-    }
-    
-    if (lastVideoRef.current && 
-        lastVideoRef.current.id === video.id && 
-        lastVideoRef.current.video_url === video.video_url) {
-      console.log("Ignoring duplicate video set request for:", video.video_name);
-      return;
-    }
-    
-    console.log("Setting new video:", video.video_name);
-    lastVideoRef.current = video;
-    setCurrentVideo(video);
-  };
   
   const extractKeywords = (text: string): string[] => {
     const cleanText = text.replace(/[^\w\s]/g, '');

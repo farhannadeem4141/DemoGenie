@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { AlertCircle, RefreshCw, X, Volume2, VolumeX } from 'lucide-react';
@@ -23,105 +22,83 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const videoRef = useRef<HTMLVideoElement>(null);
   const [errorLoading, setErrorLoading] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [isMuted, setIsMuted] = useState(true); // Start muted by default
+  const [isMuted, setIsMuted] = useState(true);
   const [isVertical, setIsVertical] = useState(false);
   const mountedRef = useRef(true);
-  const previousUrlRef = useRef(videoUrl);
+  const previousUrlRef = useRef('');
   const loadAttemptRef = useRef(0);
 
   useEffect(() => {
-    // Set mounted flag on initial render
     mountedRef.current = true;
-    
-    // Clean up when component unmounts
     return () => {
       mountedRef.current = false;
     };
   }, []);
 
-  // Only reload video when URL actually changes
   useEffect(() => {
-    if (!mountedRef.current) return;
+    if (!mountedRef.current || !videoUrl) return;
     
-    // Only reload if URL has changed and is different from the previous one
-    if (previousUrlRef.current !== videoUrl) {
-      console.log("VideoPlayer: URL changed, reloading video:", videoUrl);
-      previousUrlRef.current = videoUrl;
-      loadAttemptRef.current = 0; // Reset load attempts on new URL
+    // Only reload if URL has changed
+    if (previousUrlRef.current === videoUrl) {
+      return;
+    }
+
+    console.log("VideoPlayer: Loading new video URL:", videoUrl);
+    previousUrlRef.current = videoUrl;
+    loadAttemptRef.current = 0;
+    
+    setErrorLoading(false);
+    setIsLoading(true);
+    
+    if (videoRef.current) {
+      videoRef.current.muted = isMuted;
+      videoRef.current.load();
       
-      setErrorLoading(false);
-      setIsLoading(true);
-      
-      // Give a little time for the component to be fully mounted before playing
-      const timer = setTimeout(() => {
+      const handleLoadedMetadata = () => {
         if (!mountedRef.current) return;
         
         if (videoRef.current) {
-          videoRef.current.muted = isMuted; // Set muted state
-          videoRef.current.load();
-          
-          // Add a event listener for when metadata is loaded
-          const handleLoadedMetadata = () => {
-            if (!mountedRef.current) return;
-            
-            // Check if video is vertical (portrait mode)
-            if (videoRef.current) {
-              const isPortrait = videoRef.current.videoHeight > videoRef.current.videoWidth;
-              setIsVertical(isPortrait);
-              console.log("Video orientation detected:", isPortrait ? "vertical" : "horizontal");
-            }
-            
-            setIsLoading(false);
-            videoRef.current?.play().catch(err => {
-              console.error("Error playing video:", err);
-              if (mountedRef.current) {
-                setErrorLoading(true);
-              }
-              if (onError) onError();
-            });
-          };
-          
-          videoRef.current.addEventListener('loadedmetadata', handleLoadedMetadata);
-          
-          // Return cleanup function
-          return () => {
-            if (videoRef.current) {
-              videoRef.current.removeEventListener('loadedmetadata', handleLoadedMetadata);
-            }
-          };
+          const isPortrait = videoRef.current.videoHeight > videoRef.current.videoWidth;
+          setIsVertical(isPortrait);
         }
-      }, 300);
+        
+        setIsLoading(false);
+        videoRef.current?.play().catch(err => {
+          console.error("Error playing video:", err);
+          if (mountedRef.current) {
+            setErrorLoading(true);
+          }
+          if (onError) onError();
+        });
+      };
       
-      return () => clearTimeout(timer);
+      videoRef.current.addEventListener('loadedmetadata', handleLoadedMetadata);
+      
+      return () => {
+        if (videoRef.current) {
+          videoRef.current.removeEventListener('loadedmetadata', handleLoadedMetadata);
+        }
+      };
     }
   }, [videoUrl, onError, isMuted]);
 
-  // Handle video errors
   const handleVideoError = () => {
+    if (!mountedRef.current) return;
+    
     console.error("Video failed to load:", videoUrl);
     const currentAttempt = loadAttemptRef.current;
     
-    if (mountedRef.current) {
-      setErrorLoading(true);
-      setIsLoading(false);
-    }
+    setErrorLoading(true);
+    setIsLoading(false);
     
-    // Prevent infinite reload loops by limiting retries
-    if (currentAttempt < 2) { // Allow max 2 automatic retries
-      console.log(`Auto-retry attempt ${currentAttempt + 1} for video:`, videoUrl);
+    if (currentAttempt < 2) {
       loadAttemptRef.current += 1;
-      
-      setTimeout(() => {
-        if (mountedRef.current) {
-          retryLoading();
-        }
-      }, 2000); // Wait 2 seconds before retry
+      setTimeout(retryLoading, 2000);
     } else if (onError) {
       onError();
     }
   };
 
-  // Retry loading video
   const retryLoading = () => {
     if (!mountedRef.current) return;
     
@@ -133,7 +110,6 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     }
   };
 
-  // Toggle mute state
   const toggleMute = () => {
     setIsMuted(!isMuted);
     if (videoRef.current) {
