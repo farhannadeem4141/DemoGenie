@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { useConversationHistory } from '@/hooks/useConversationHistory';
 import VideoPlayer from './VideoPlayer';
@@ -22,20 +21,27 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
   const [recordingStatus, setRecordingStatus] = useState(isRecording);
   const { toast } = useToast();
   const [videoKey, setVideoKey] = useState('');
+  const [currentVideoId, setCurrentVideoId] = useState<number | null>(null);
 
   useEffect(() => {
-    if (currentVideo) {
-      console.log("Video available, preparing to show:", currentVideo);
-      // Set a stable key based on the video ID and URL to prevent unnecessary re-renders
-      setVideoKey(`video-${currentVideo.id}-${currentVideo.video_url.substring(0, 20)}`);
+    if (currentVideo && (!currentVideoId || currentVideoId !== currentVideo.id)) {
+      console.log("New video available, preparing to show:", currentVideo);
+      
+      setCurrentVideoId(currentVideo.id);
+      
+      const videoKeyValue = `video-${currentVideo.id}-${currentVideo.video_url.substring(0, 20)}`;
+      setVideoKey(videoKeyValue);
+      
       const timer = setTimeout(() => {
         setIsVideoVisible(true);
       }, 300);
+      
       return () => clearTimeout(timer);
-    } else {
+    } else if (!currentVideo) {
       setIsVideoVisible(false);
+      setCurrentVideoId(null);
     }
-  }, [currentVideo]);
+  }, [currentVideo, currentVideoId]);
 
   useEffect(() => {
     console.log("Recording status prop changed:", isRecording);
@@ -246,6 +252,7 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
     setIsVideoVisible(false);
     setTimeout(() => {
       setCurrentVideo(null);
+      setCurrentVideoId(null);
     }, 300);
     
     toast({

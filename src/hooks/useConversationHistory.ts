@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { searchVideosByKeyword } from '@/services/video';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -30,6 +30,8 @@ export function useConversationHistory() {
   const [currentVideo, setCurrentVideo] = useState<VideoMatch | null>(null);
   const [errorLogs, setErrorLogs] = useState<SearchErrorLog[]>([]);
   const { toast } = useToast();
+  const initialVideoLoadedRef = useRef(false);
+  const lastVideoRef = useRef<VideoMatch | null>(null);
   
   useEffect(() => {
     const loadConversationHistory = () => {
@@ -110,24 +112,46 @@ export function useConversationHistory() {
   }, [messages]);
 
   useEffect(() => {
-    // Set the specified initial video URL
-    const introVideo = {
-      id: 0,
-      video_url: 'https://aalbdeydgpallvcmmsvq.supabase.co/storage/v1/object/sign/DemoGenie/WhatsApp%20Intro%20By%20Sophie.mp4?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1cmwiOiJEZW1vR2VuaWUvV2hhdHNBcHAgSW50cm8gQnkgU29waGllLm1wNCIsImlhdCI6MTc0MTEwMjcwOSwiZXhwIjoxNzcyNjM4NzA5fQ.rvjigS14YSrlPd2VqEDpQHHQlCsOSivOegXkciDnnEA',
-      video_name: 'WhatsApp Intro By Sophie',
-      keyword: 'WhatsApp'
-    };
+    if (!initialVideoLoadedRef.current && !currentVideo && !lastVideoRef.current) {
+      initialVideoLoadedRef.current = true;
+      
+      const introVideo = {
+        id: 0,
+        video_url: 'https://aalbdeydgpallvcmmsvq.supabase.co/storage/v1/object/sign/DemoGenie/WhatsApp%20Intro%20By%20Sophie.mp4?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1cmwiOiJEZW1vR2VuaWUvV2hhdHNBcHAgSW50cm8gQnkgU29waGllLm1wNCIsImlhdCI6MTc0MTEwMjcwOSwiZXhwIjoxNzcyNjM4NzA5fQ.rvjigS14YSrlPd2VqEDpQHHQlCsOSivOegXkciDnnEA',
+        video_name: 'WhatsApp Intro By Sophie',
+        keyword: 'WhatsApp'
+      };
+      
+      console.log("Setting initial intro video:", introVideo);
+      lastVideoRef.current = introVideo;
+      setCurrentVideo(introVideo);
+      
+      toast({
+        title: "Video loaded",
+        description: `Now playing: ${introVideo.video_name}`,
+        duration: 3000,
+      });
+    }
+  }, [toast, currentVideo]);
+  
+  const setCurrentVideoWithTracking = (video: VideoMatch | null) => {
+    if (video === null) {
+      lastVideoRef.current = null;
+      setCurrentVideo(null);
+      return;
+    }
     
-    console.log("Setting initial intro video:", introVideo);
-    setCurrentVideo(introVideo);
+    if (lastVideoRef.current && 
+        lastVideoRef.current.id === video.id && 
+        lastVideoRef.current.video_url === video.video_url) {
+      console.log("Ignoring duplicate video set request for:", video.video_name);
+      return;
+    }
     
-    toast({
-      title: "Video loaded",
-      description: `Now playing: ${introVideo.video_name}`,
-      duration: 3000,
-    });
-    
-  }, [toast]);
+    console.log("Setting new video:", video.video_name);
+    lastVideoRef.current = video;
+    setCurrentVideo(video);
+  };
   
   const extractKeywords = (text: string): string[] => {
     const cleanText = text.replace(/[^\w\s]/g, '');
@@ -299,7 +323,7 @@ export function useConversationHistory() {
         console.log("%c [SEARCH LOG] Matched videos for priority keyword: ", "background: #b5179e; color: white; padding: 2px; border-radius: 4px;", matchedVideos);
         setMatchedVideos(matchedVideos);
         console.log("%c [SEARCH LOG] Setting current video to high priority match: ", "background: #b5179e; color: white; padding: 2px; border-radius: 4px;", matchedVideos[0]);
-        setCurrentVideo(matchedVideos[0]);
+        setCurrentVideoWithTracking(matchedVideos[0]);
         
         toast({
           title: "Video found",
@@ -341,7 +365,7 @@ export function useConversationHistory() {
         console.log("%c [SEARCH LOG] Matched videos for keyword '" + keyword + "': ", "background: #f72585; color: white; padding: 2px; border-radius: 4px;", matchedVideos);
         setMatchedVideos(matchedVideos);
         console.log("%c [SEARCH LOG] Setting current video to: ", "background: #f72585; color: white; padding: 2px; border-radius: 4px;", matchedVideos[0]);
-        setCurrentVideo(matchedVideos[0]);
+        setCurrentVideoWithTracking(matchedVideos[0]);
         
         toast({
           title: "Video found",
@@ -410,7 +434,7 @@ export function useConversationHistory() {
     clearHistory,
     matchedVideos,
     currentVideo,
-    setCurrentVideo,
+    setCurrentVideo: setCurrentVideoWithTracking,
     errorLogs,
     clearErrorLogs
   };

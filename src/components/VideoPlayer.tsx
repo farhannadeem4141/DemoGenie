@@ -27,6 +27,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const [isVertical, setIsVertical] = useState(false);
   const mountedRef = useRef(true);
   const previousUrlRef = useRef(videoUrl);
+  const loadAttemptRef = useRef(0);
 
   useEffect(() => {
     // Set mounted flag on initial render
@@ -42,10 +43,11 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   useEffect(() => {
     if (!mountedRef.current) return;
     
-    // Only reload if URL has changed
+    // Only reload if URL has changed and is different from the previous one
     if (previousUrlRef.current !== videoUrl) {
       console.log("VideoPlayer: URL changed, reloading video:", videoUrl);
       previousUrlRef.current = videoUrl;
+      loadAttemptRef.current = 0; // Reset load attempts on new URL
       
       setErrorLoading(false);
       setIsLoading(true);
@@ -97,11 +99,26 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   // Handle video errors
   const handleVideoError = () => {
     console.error("Video failed to load:", videoUrl);
+    const currentAttempt = loadAttemptRef.current;
+    
     if (mountedRef.current) {
       setErrorLoading(true);
       setIsLoading(false);
     }
-    if (onError) onError();
+    
+    // Prevent infinite reload loops by limiting retries
+    if (currentAttempt < 2) { // Allow max 2 automatic retries
+      console.log(`Auto-retry attempt ${currentAttempt + 1} for video:`, videoUrl);
+      loadAttemptRef.current += 1;
+      
+      setTimeout(() => {
+        if (mountedRef.current) {
+          retryLoading();
+        }
+      }, 2000); // Wait 2 seconds before retry
+    } else if (onError) {
+      onError();
+    }
   };
 
   // Retry loading video
