@@ -8,6 +8,7 @@ import FAQ from '@/components/FAQ';
 import Footer from '@/components/Footer';
 import TranscriptListener from '@/components/TranscriptListener';
 import NativeSpeechRecorder from '@/components/NativeSpeechRecorder';
+import SpeechToTextButton from '@/components/SpeechToTextButton';
 import { useToast } from '@/hooks/use-toast';
 
 interface VapiSDK {
@@ -485,6 +486,7 @@ const Index = () => {
         <StepGuide />
         <FAQ />
         <TranscriptListener isRecording={isRecordingActive} />
+        <SpeechToTextButton />
       </main>
       <Footer />
       {isRecordingActive && (
