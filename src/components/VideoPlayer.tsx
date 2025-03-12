@@ -26,6 +26,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const [isMuted, setIsMuted] = useState(true); // Start muted by default
   const [isVertical, setIsVertical] = useState(false);
   const mountedRef = useRef(true);
+  const previousUrlRef = useRef(videoUrl);
 
   useEffect(() => {
     // Set mounted flag on initial render
@@ -37,55 +38,60 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     };
   }, []);
 
+  // Only reload video when URL actually changes
   useEffect(() => {
-    // Reset error state when URL changes
     if (!mountedRef.current) return;
     
-    setErrorLoading(false);
-    setIsLoading(true);
-    console.log("VideoPlayer: Loading video URL:", videoUrl);
-    
-    // Give a little time for the component to be fully mounted before playing
-    const timer = setTimeout(() => {
-      if (!mountedRef.current) return;
+    // Only reload if URL has changed
+    if (previousUrlRef.current !== videoUrl) {
+      console.log("VideoPlayer: URL changed, reloading video:", videoUrl);
+      previousUrlRef.current = videoUrl;
       
-      if (videoRef.current) {
-        videoRef.current.muted = isMuted; // Set muted state
-        videoRef.current.load();
+      setErrorLoading(false);
+      setIsLoading(true);
+      
+      // Give a little time for the component to be fully mounted before playing
+      const timer = setTimeout(() => {
+        if (!mountedRef.current) return;
         
-        // Add a event listener for when metadata is loaded
-        const handleLoadedMetadata = () => {
-          if (!mountedRef.current) return;
+        if (videoRef.current) {
+          videoRef.current.muted = isMuted; // Set muted state
+          videoRef.current.load();
           
-          // Check if video is vertical (portrait mode)
-          if (videoRef.current) {
-            const isPortrait = videoRef.current.videoHeight > videoRef.current.videoWidth;
-            setIsVertical(isPortrait);
-            console.log("Video orientation detected:", isPortrait ? "vertical" : "horizontal");
-          }
-          
-          setIsLoading(false);
-          videoRef.current?.play().catch(err => {
-            console.error("Error playing video:", err);
-            if (mountedRef.current) {
-              setErrorLoading(true);
+          // Add a event listener for when metadata is loaded
+          const handleLoadedMetadata = () => {
+            if (!mountedRef.current) return;
+            
+            // Check if video is vertical (portrait mode)
+            if (videoRef.current) {
+              const isPortrait = videoRef.current.videoHeight > videoRef.current.videoWidth;
+              setIsVertical(isPortrait);
+              console.log("Video orientation detected:", isPortrait ? "vertical" : "horizontal");
             }
-            if (onError) onError();
-          });
-        };
-        
-        videoRef.current.addEventListener('loadedmetadata', handleLoadedMetadata);
-        
-        // Return cleanup function
-        return () => {
-          if (videoRef.current) {
-            videoRef.current.removeEventListener('loadedmetadata', handleLoadedMetadata);
-          }
-        };
-      }
-    }, 300);
-    
-    return () => clearTimeout(timer);
+            
+            setIsLoading(false);
+            videoRef.current?.play().catch(err => {
+              console.error("Error playing video:", err);
+              if (mountedRef.current) {
+                setErrorLoading(true);
+              }
+              if (onError) onError();
+            });
+          };
+          
+          videoRef.current.addEventListener('loadedmetadata', handleLoadedMetadata);
+          
+          // Return cleanup function
+          return () => {
+            if (videoRef.current) {
+              videoRef.current.removeEventListener('loadedmetadata', handleLoadedMetadata);
+            }
+          };
+        }
+      }, 300);
+      
+      return () => clearTimeout(timer);
+    }
   }, [videoUrl, onError, isMuted]);
 
   // Handle video errors

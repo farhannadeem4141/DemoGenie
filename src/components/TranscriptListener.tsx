@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { useConversationHistory } from '@/hooks/useConversationHistory';
 import VideoPlayer from './VideoPlayer';
@@ -20,10 +21,13 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
   const [isVideoVisible, setIsVideoVisible] = useState(false);
   const [recordingStatus, setRecordingStatus] = useState(isRecording);
   const { toast } = useToast();
+  const [videoKey, setVideoKey] = useState('');
 
   useEffect(() => {
     if (currentVideo) {
       console.log("Video available, preparing to show:", currentVideo);
+      // Set a stable key based on the video ID and URL to prevent unnecessary re-renders
+      setVideoKey(`video-${currentVideo.id}-${currentVideo.video_url.substring(0, 20)}`);
       const timer = setTimeout(() => {
         setIsVideoVisible(true);
       }, 300);
@@ -266,7 +270,7 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
             isVideoVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
           )}>
             <VideoPlayer 
-              key={`video-${currentVideo.id}-${Date.now()}`}
+              key={videoKey}
               videoUrl={currentVideo.video_url} 
               videoName={currentVideo.video_name || `Video related to "${currentVideo.keyword}"`}
               onEnded={() => console.log("Video playback ended")}
