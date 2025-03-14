@@ -33,8 +33,14 @@ export function useConversationHistory() {
   const initialVideoLoadedRef = useRef(false);
   const lastVideoRef = useRef<VideoMatch | null>(null);
   const toastTimeoutRef = useRef<NodeJS.Timeout>();
+  const isProcessingRef = useRef(false);
   
   const setCurrentVideoWithTracking = (video: VideoMatch | null) => {
+    if (isProcessingRef.current) {
+      console.log("Already processing a video set request, ignoring");
+      return;
+    }
+    
     if (video === null) {
       lastVideoRef.current = null;
       setCurrentVideo(null);
@@ -49,6 +55,7 @@ export function useConversationHistory() {
     }
     
     console.log("Setting new video:", video.video_name);
+    isProcessingRef.current = true;
     lastVideoRef.current = video;
     setCurrentVideo(video);
     
@@ -64,6 +71,11 @@ export function useConversationHistory() {
         description: `Now playing: ${video.video_name || video.keyword}`,
         duration: 3000,
       });
+      
+      // Release the processing lock after a delay
+      setTimeout(() => {
+        isProcessingRef.current = false;
+      }, 2000);
     }, 500);
   };
 
@@ -264,6 +276,14 @@ export function useConversationHistory() {
       return;
     }
     
+    // Skip video search if already processing
+    if (isProcessingRef.current) {
+      console.log("%c [MESSAGE LOG] Already processing a video search, skipping", "background: #3a0ca3; color: white; padding: 2px; border-radius: 4px;");
+      return;
+    }
+    
+    isProcessingRef.current = true;
+    
     const messageText = typeof message === 'string' ? message : message.text;
     const keywords = extractKeywords(messageText);
     console.log("%c [MESSAGE LOG] Extracted keywords: ", "background: #3a0ca3; color: white; padding: 2px; border-radius: 4px;", keywords);
@@ -281,6 +301,8 @@ export function useConversationHistory() {
         description: "Couldn't extract any keywords from the message",
         duration: 3000,
       });
+      
+      isProcessingRef.current = false;
       return;
     }
     
@@ -413,6 +435,11 @@ export function useConversationHistory() {
         duration: 5000,
       });
     }
+    
+    // Release the processing lock after a timeout if we haven't already
+    setTimeout(() => {
+      isProcessingRef.current = false;
+    }, 3000);
   };
   
   const clearHistory = () => {

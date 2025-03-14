@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { AlertCircle, RefreshCw, X, Volume2, VolumeX } from 'lucide-react';
@@ -27,6 +28,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const mountedRef = useRef(true);
   const previousUrlRef = useRef('');
   const loadAttemptRef = useRef(0);
+  const hasInitializedRef = useRef(false);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -38,14 +40,16 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   useEffect(() => {
     if (!mountedRef.current || !videoUrl) return;
     
-    // Only reload if URL has changed
-    if (previousUrlRef.current === videoUrl) {
+    // Skip loading if URL hasn't changed and we've already initialized
+    if (previousUrlRef.current === videoUrl && hasInitializedRef.current) {
+      console.log("VideoPlayer: Same URL, skipping reload:", videoUrl);
       return;
     }
 
     console.log("VideoPlayer: Loading new video URL:", videoUrl);
     previousUrlRef.current = videoUrl;
     loadAttemptRef.current = 0;
+    hasInitializedRef.current = true;
     
     setErrorLoading(false);
     setIsLoading(true);

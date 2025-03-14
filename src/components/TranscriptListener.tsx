@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useConversationHistory } from '@/hooks/useConversationHistory';
 import VideoPlayer from './VideoPlayer';
 import { cn } from '@/lib/utils';
@@ -22,6 +22,7 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
   const { toast } = useToast();
   const [videoKey, setVideoKey] = useState('');
   const [currentVideoId, setCurrentVideoId] = useState<number | null>(null);
+  const processingKeywordRef = useRef(false);
 
   useEffect(() => {
     if (currentVideo && (!currentVideoId || currentVideoId !== currentVideo.id)) {
@@ -29,7 +30,7 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
       
       setCurrentVideoId(currentVideo.id);
       
-      const videoKeyValue = `video-${currentVideo.id}-${currentVideo.video_url.substring(0, 20)}`;
+      const videoKeyValue = `video-${currentVideo.id}-${Date.now()}`;
       setVideoKey(videoKeyValue);
       
       const timer = setTimeout(() => {
@@ -141,6 +142,13 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
         const inputText = event.detail.text;
         console.log("Voice input captured:", inputText);
         
+        if (processingKeywordRef.current) {
+          console.log("Already processing a keyword, skipping this input");
+          return;
+        }
+        
+        processingKeywordRef.current = true;
+        
         addMessage({
           text: inputText,
           isAiMessage: false,
@@ -182,6 +190,8 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
                 description: `Now playing: ${catalogVideo.video_name}`,
                 duration: 3000,
               });
+              
+              processingKeywordRef.current = false;
               return;
             }
           } catch (error) {
@@ -194,6 +204,10 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
           description: `Processing: "${event.detail.text.substring(0, 30)}${event.detail.text.length > 30 ? '...' : ''}"`,
           duration: 3000,
         });
+        
+        setTimeout(() => {
+          processingKeywordRef.current = false;
+        }, 3000);
       }
     };
 
