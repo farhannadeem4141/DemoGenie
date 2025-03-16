@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState, useRef } from 'react';
 import { useConversationHistory } from '@/hooks/useConversationHistory';
 import VideoPlayer from './VideoPlayer';
@@ -100,13 +101,17 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
               keyword: 'catalog'
             };
             console.log("Setting catalog video directly:", catalogVideo);
-            setCurrentVideo(catalogVideo);
             
-            toast({
-              title: "Catalog Video Found",
-              description: `Now playing: ${catalogVideo.video_name}`,
-              duration: 3000,
-            });
+            // Ensure video_name is always provided
+            if (catalogVideo.video_name) {
+              setCurrentVideo(catalogVideo);
+              
+              toast({
+                title: "Catalog Video Found",
+                description: `Now playing: ${catalogVideo.video_name}`,
+                duration: 3000,
+              });
+            }
             
             processingKeywordRef.current = false;
             return;
@@ -127,7 +132,14 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
       
       if (searchResult.success && searchResult.video) {
         console.log("Setting video from search result:", searchResult.video);
-        setCurrentVideo(searchResult.video);
+        
+        // The video object now has a guaranteed video_name property
+        setCurrentVideo({
+          id: searchResult.video.id,
+          video_url: searchResult.video.video_url,
+          video_name: searchResult.video.video_name,
+          keyword: searchResult.video.keyword
+        });
         
         toast({
           title: "Video Found",

@@ -12,7 +12,7 @@ interface VideoSearchDetails {
   video?: {
     id: number;
     video_url: string;
-    video_name?: string;
+    video_name: string; // Changed from optional to required
     keyword: string;
   };
 }
@@ -109,7 +109,7 @@ export async function searchAndPlayVideo(keyword: string): Promise<VideoSearchDe
       
       console.log("%c [VIDEO SEARCH] Found videos with lenient search:", "background: #4CAF50; color: white; padding: 2px; border-radius: 4px;", lenientData);
       
-      // Return the first matching video
+      // Return the first matching video - ensure video_name is always a string
       return {
         success: true,
         video: {
@@ -123,7 +123,7 @@ export async function searchAndPlayVideo(keyword: string): Promise<VideoSearchDe
     
     console.log("%c [VIDEO SEARCH] Found videos:", "background: #4CAF50; color: white; padding: 2px; border-radius: 4px;", data);
     
-    // Return the first matching video (most relevant)
+    // Return the first matching video - ensure video_name is always a string
     return {
       success: true,
       video: {
