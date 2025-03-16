@@ -109,6 +109,20 @@ export async function searchAndPlayVideo(keyword: string): Promise<VideoSearchDe
       
       console.log("%c [VIDEO SEARCH] Found videos with lenient search:", "background: #4CAF50; color: white; padding: 2px; border-radius: 4px;", lenientData);
       
+      // Validate video URL
+      if (!lenientData[0].video_url || !lenientData[0].video_url.startsWith('http')) {
+        return {
+          success: false,
+          errorDetails: {
+            step: 'url_validation',
+            message: `Invalid video URL: ${lenientData[0].video_url || 'empty'}`,
+            technicalDetails: {
+              record: lenientData[0]
+            }
+          }
+        };
+      }
+      
       // Return the first matching video - ensure video_name is always a string
       return {
         success: true,
@@ -122,6 +136,20 @@ export async function searchAndPlayVideo(keyword: string): Promise<VideoSearchDe
     }
     
     console.log("%c [VIDEO SEARCH] Found videos:", "background: #4CAF50; color: white; padding: 2px; border-radius: 4px;", data);
+    
+    // Validate video URL
+    if (!data[0].video_url || !data[0].video_url.startsWith('http')) {
+      return {
+        success: false,
+        errorDetails: {
+          step: 'url_validation',
+          message: `Invalid video URL: ${data[0].video_url || 'empty'}`,
+          technicalDetails: {
+            record: data[0]
+          }
+        }
+      };
+    }
     
     // Return the first matching video - ensure video_name is always a string
     return {
