@@ -4,6 +4,7 @@ import VideoPlayer from './VideoPlayer';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { queryVideosWithCatalogTag } from '@/services/video';
+import { searchAndPlayVideo } from '@/services/video/searchAndPlay';
 
 interface TranscriptListenerProps {
   className?: string;
@@ -23,6 +24,7 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
   const [videoKey, setVideoKey] = useState('');
   const [currentVideoId, setCurrentVideoId] = useState<number | null>(null);
   const processingKeywordRef = useRef(false);
+  const lastProcessedInputRef = useRef('');
 
   useEffect(() => {
     if (currentVideo && (!currentVideoId || currentVideoId !== currentVideo.id)) {
@@ -49,6 +51,123 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
     setRecordingStatus(isRecording);
   }, [isRecording]);
 
+  const handleVoiceInput = async (inputText: string) => {
+    if (!inputText || inputText.trim() === '') return;
+    
+    if (lastProcessedInputRef.current === inputText) {
+      console.log("Skipping duplicate voice input:", inputText);
+      return;
+    }
+    lastProcessedInputRef.current = inputText;
+    
+    console.log("Voice input for search:", inputText);
+    
+    if (processingKeywordRef.current) {
+      console.log("Already processing a keyword, skipping this input");
+      return;
+    }
+    
+    processingKeywordRef.current = true;
+    
+    addMessage({
+      text: inputText,
+      isAiMessage: false,
+      timestamp: Date.now()
+    });
+    
+    try {
+      const savedInputs = JSON.parse(localStorage.getItem('voice_input_history') || '[]');
+      const newInput = {
+        text: inputText,
+        timestamp: Date.now()
+      };
+      
+      localStorage.setItem('voice_input_history', 
+        JSON.stringify([newInput, ...savedInputs].slice(0, 50))
+      );
+      console.log("Saved voice input to local storage");
+      
+      if (inputText.toLowerCase().includes('catalog')) {
+        console.log("Catalog keyword detected, using specialized catalog query");
+        try {
+          const result = await queryVideosWithCatalogTag();
+          console.log("Catalog query result:", result);
+          if (result.success && result.data && result.data.length > 0) {
+            const catalogVideo = {
+              id: result.data[0].id,
+              video_url: result.data[0].video_url,
+              video_name: result.data[0].video_name || 'Catalog Feature',
+              keyword: 'catalog'
+            };
+            console.log("Setting catalog video directly:", catalogVideo);
+            setCurrentVideo(catalogVideo);
+            
+            toast({
+              title: "Catalog Video Found",
+              description: `Now playing: ${catalogVideo.video_name}`,
+              duration: 3000,
+            });
+            
+            processingKeywordRef.current = false;
+            return;
+          }
+        } catch (error) {
+          console.error("Error in direct catalog query:", error);
+        }
+      }
+      
+      toast({
+        title: "Searching for Video",
+        description: `Looking for video related to: "${inputText.substring(0, 30)}${inputText.length > 30 ? '...' : ''}"`,
+        duration: 2000,
+      });
+      
+      const searchResult = await searchAndPlayVideo(inputText);
+      console.log("Video search result:", searchResult);
+      
+      if (searchResult.success && searchResult.video) {
+        console.log("Setting video from search result:", searchResult.video);
+        setCurrentVideo(searchResult.video);
+        
+        toast({
+          title: "Video Found",
+          description: `Now playing: ${searchResult.video.video_name}`,
+          duration: 3000,
+        });
+      } else {
+        console.error("Video search failed:", searchResult.errorDetails);
+        
+        const errorStep = searchResult.errorDetails?.step || 'unknown';
+        const errorMessage = searchResult.errorDetails?.message || 'Unknown error during video search';
+        
+        toast({
+          variant: "destructive",
+          title: "No Video Found",
+          description: `${errorMessage} (Error at: ${errorStep})`,
+          duration: 5000,
+        });
+        
+        addMessage({
+          text: `No video found for "${inputText}". Error: ${errorMessage}`,
+          isSystem: true,
+          timestamp: Date.now()
+        });
+      }
+    } catch (error) {
+      console.error("Error processing voice input:", error);
+      toast({
+        variant: "destructive",
+        title: "Error Processing Voice Input",
+        description: error instanceof Error ? error.message : "Unknown error",
+        duration: 5000,
+      });
+    } finally {
+      setTimeout(() => {
+        processingKeywordRef.current = false;
+      }, 1000);
+    }
+  };
+
   useEffect(() => {
     const checkForExistingInputs = () => {
       try {
@@ -58,16 +177,13 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
           console.log("Found existing voice inputs:", parsedInputs.length);
           
           if (Array.isArray(parsedInputs) && parsedInputs.length > 0) {
-            parsedInputs.forEach(input => {
-              if (input && input.text) {
-                console.log("Processing existing voice input:", input.text);
-                addMessage({
-                  text: input.text,
-                  isAiMessage: false,
-                  timestamp: input.timestamp || Date.now()
-                });
+            const latestInput = parsedInputs[0];
+            if (latestInput && latestInput.text) {
+              console.log("Processing most recent voice input:", latestInput.text);
+              if (lastProcessedInputRef.current !== latestInput.text) {
+                handleVoiceInput(latestInput.text);
               }
-            });
+            }
           }
         } else {
           console.log("No existing voice inputs found in localStorage");
@@ -142,72 +258,7 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
         const inputText = event.detail.text;
         console.log("Voice input captured:", inputText);
         
-        if (processingKeywordRef.current) {
-          console.log("Already processing a keyword, skipping this input");
-          return;
-        }
-        
-        processingKeywordRef.current = true;
-        
-        addMessage({
-          text: inputText,
-          isAiMessage: false,
-          timestamp: Date.now()
-        });
-        
-        try {
-          const savedInputs = JSON.parse(localStorage.getItem('voice_input_history') || '[]');
-          const newInput = {
-            text: inputText,
-            timestamp: Date.now()
-          };
-          
-          localStorage.setItem('voice_input_history', 
-            JSON.stringify([newInput, ...savedInputs].slice(0, 50))
-          );
-          console.log("Saved voice input to local storage");
-        } catch (error) {
-          console.error("Error saving voice input to localStorage:", error);
-        }
-        
-        if (inputText.toLowerCase().includes('catalog')) {
-          console.log("Catalog keyword detected, using specialized catalog query");
-          try {
-            const result = await queryVideosWithCatalogTag();
-            console.log("Catalog query result:", result);
-            if (result.success && result.data && result.data.length > 0) {
-              const catalogVideo = {
-                id: result.data[0].id,
-                video_url: result.data[0].video_url,
-                video_name: result.data[0].video_name || 'Catalog Feature',
-                keyword: 'catalog'
-              };
-              console.log("Setting catalog video directly:", catalogVideo);
-              setCurrentVideo(catalogVideo);
-              
-              toast({
-                title: "Catalog Video Found",
-                description: `Now playing: ${catalogVideo.video_name}`,
-                duration: 3000,
-              });
-              
-              processingKeywordRef.current = false;
-              return;
-            }
-          } catch (error) {
-            console.error("Error in direct catalog query:", error);
-          }
-        }
-        
-        toast({
-          title: "Voice Input Received",
-          description: `Processing: "${event.detail.text.substring(0, 30)}${event.detail.text.length > 30 ? '...' : ''}"`,
-          duration: 3000,
-        });
-        
-        setTimeout(() => {
-          processingKeywordRef.current = false;
-        }, 3000);
+        await handleVoiceInput(inputText);
       }
     };
 
