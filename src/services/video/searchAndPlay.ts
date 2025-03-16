@@ -35,6 +35,11 @@ export async function searchAndPlayVideo(keyword: string): Promise<VideoSearchDe
     const normalizedKeyword = keyword.trim().toLowerCase();
     console.log("%c [VIDEO SEARCH] Normalized keyword: " + normalizedKeyword, "background: #4CAF50; color: white; padding: 2px; border-radius: 4px;");
     
+    // Special handling for "Quick replies" - log that we're explicitly testing for this keyword
+    if (normalizedKeyword === "quick replies") {
+      console.log("%c [VIDEO SEARCH] Special test case detected: Quick replies keyword", "background: #4CAF50; color: white; padding: 2px; border-radius: 4px;");
+    }
+    
     // Construct the query to search in multiple tag columns
     let query = supabase
       .from('Videos')

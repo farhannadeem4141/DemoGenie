@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { VideoSearchResult } from './types';
 
@@ -129,4 +128,48 @@ export async function searchVideosByKeyword(keyword: string): Promise<VideoSearc
       rawQuery: 'Error: Query construction failed'
     };
   }
+}
+
+/**
+ * Helper function to test "Quick replies" keyword search
+ * Run this in the browser console: window.testQuickRepliesSearch()
+ */
+export async function testQuickRepliesSearch() {
+  console.log("Running Quick Replies video search test...");
+  
+  try {
+    // Save "Quick replies" to voice input history
+    const savedInputs = JSON.parse(localStorage.getItem('voice_input_history') || '[]');
+    const newInput = {
+      text: "Quick replies",
+      timestamp: Date.now(),
+      source: 'test'
+    };
+    
+    localStorage.setItem('voice_input_history', 
+      JSON.stringify([newInput, ...savedInputs].slice(0, 50))
+    );
+    console.log("Saved 'Quick replies' to voice input history");
+    
+    // Manually trigger the voice input event to simulate voice recognition
+    window.dispatchEvent(new CustomEvent('voice_input', {
+      detail: {
+        type: 'voice_input',
+        text: "Quick replies"
+      }
+    }));
+    
+    console.log("Dispatched voice_input event with 'Quick replies'");
+    console.log("Check console for search results and video player for playback");
+    
+    return true;
+  } catch (e) {
+    console.error("Error running Quick replies test:", e);
+    return false;
+  }
+}
+
+// Make the test function available globally for easy access from console
+if (typeof window !== 'undefined') {
+  (window as any).testQuickRepliesSearch = testQuickRepliesSearch;
 }
