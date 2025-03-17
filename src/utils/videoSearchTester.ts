@@ -1,5 +1,7 @@
 
 import { searchAndPlayVideo } from '@/services/video/searchAndPlay';
+import { searchVideosByKeyword } from '@/services/video/keywordSearch';
+import { supabase } from '@/integrations/supabase/client';
 
 /**
  * Test script to verify if voice input handling and video search are working correctly
@@ -207,7 +209,7 @@ export async function testVoiceInputVideoSearch(customKeyword?: string) {
               console.log('2. The video state in the TranscriptListener might not be updating');
               console.log('3. The video player might be hidden due to CSS issues');
               
-              // Try one more time with a direct message to the conversation history
+              // Try one more approach with a direct message to the conversation history
               console.log('Attempting one more approach - check if useConversationHistory hook is working...');
               
               // Look for any setCurrentVideo functions in the global scope
@@ -253,11 +255,46 @@ export async function testVoiceInputVideoSearch(customKeyword?: string) {
               // Check if the database has any videos at all
               console.log('Checking if the database has any videos...');
               
-              import('@/services/video/keywordSearch').then(module => {
-                module.getAllVideos().then(allVideos => {
-                  console.log('All videos in database:', allVideos);
-                });
-              });
+              // Check all videos in the database directly
+              const checkAllVideos = async () => {
+                try {
+                  const { data, error } = await supabase
+                    .from('Videos')
+                    .select('*')
+                    .limit(10);
+                  
+                  if (error) throw error;
+                  
+                  console.log('Sample of videos in database:', data);
+                  
+                  if (data.length > 0) {
+                    console.log('✅ Found', data.length, 'videos in database');
+                    
+                    // Check for videos with "quick replies" in tags
+                    const quickRepliesVideos = data.filter(video => {
+                      const tags = [
+                        video.video_tag1, 
+                        video.video_tag2, 
+                        video.video_tag3
+                      ].map(tag => tag?.toLowerCase() || '');
+                      
+                      return tags.some(tag => tag.includes('quick') && tag.includes('replies'));
+                    });
+                    
+                    if (quickRepliesVideos.length > 0) {
+                      console.log('✅ Found videos with "quick replies" in tags:', quickRepliesVideos);
+                    } else {
+                      console.log('❌ No videos with "quick replies" in tags found');
+                    }
+                  } else {
+                    console.log('❌ No videos found in the database');
+                  }
+                } catch (err) {
+                  console.error('Error checking all videos:', err);
+                }
+              };
+              
+              checkAllVideos();
             }
           });
         });
