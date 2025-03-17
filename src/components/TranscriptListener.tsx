@@ -28,52 +28,70 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
   const lastProcessedInputRef = useRef('');
   const [videoRenderAttempts, setVideoRenderAttempts] = useState(0);
   const videoErrorsRef = useRef<string[]>([]);
+  const videoVisibilityTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Enhanced effect for video rendering with better logging
+  // Enhanced effect for video rendering with better logging and stable behavior
   useEffect(() => {
-    if (currentVideo && (!currentVideoId || currentVideoId !== currentVideo.id)) {
-      console.log("TranscriptListener: New video available, details:", {
-        id: currentVideo.id,
-        name: currentVideo.video_name,
-        url: currentVideo.video_url.substring(0, 50) + '...'
-      });
-      
-      // Test if the video URL is valid
-      if (!currentVideo.video_url || !currentVideo.video_url.startsWith('http')) {
-        console.error("TranscriptListener: Invalid video URL", currentVideo.video_url);
-        videoErrorsRef.current.push(`Invalid video URL: ${currentVideo.video_url?.substring(0, 30)}...`);
-        toast({
-          variant: "destructive",
-          title: "Video Error",
-          description: "Invalid video URL format",
-          duration: 3000,
-        });
-        return;
-      }
-      
-      setCurrentVideoId(currentVideo.id);
-      
-      // Generate a unique key with a timestamp to force remounting
-      const videoKeyValue = `video-${currentVideo.id}-${Date.now()}-${videoRenderAttempts}`;
-      console.log(`TranscriptListener: Setting video key to ${videoKeyValue}`);
-      setVideoKey(videoKeyValue);
-      
-      // Increment render attempt counter for debugging
-      setVideoRenderAttempts(prev => prev + 1);
-      
-      const timer = setTimeout(() => {
-        console.log("TranscriptListener: Making video visible");
-        setIsVideoVisible(true);
-      }, 300);
-      
-      return () => clearTimeout(timer);
-    } else if (!currentVideo) {
+    if (!currentVideo) {
       console.log("TranscriptListener: No current video, hiding player");
       setIsVideoVisible(false);
       setCurrentVideoId(null);
+      return;
     }
-  }, [currentVideo, currentVideoId, toast, videoRenderAttempts]);
+    
+    if (currentVideoId === currentVideo.id) {
+      console.log("TranscriptListener: Video ID unchanged, skipping remount");
+      return;
+    }
+    
+    console.log("TranscriptListener: New video available, details:", {
+      id: currentVideo.id,
+      name: currentVideo.video_name,
+      url: currentVideo.video_url.substring(0, 50) + '...'
+    });
+    
+    // Test if the video URL is valid
+    if (!currentVideo.video_url || !currentVideo.video_url.startsWith('http')) {
+      console.error("TranscriptListener: Invalid video URL", currentVideo.video_url);
+      videoErrorsRef.current.push(`Invalid video URL: ${currentVideo.video_url?.substring(0, 30)}...`);
+      toast({
+        variant: "destructive",
+        title: "Video Error",
+        description: "Invalid video URL format",
+        duration: 3000,
+      });
+      return;
+    }
+    
+    setCurrentVideoId(currentVideo.id);
+    
+    // Generate a unique key with a timestamp to force remounting
+    const videoKeyValue = `video-${currentVideo.id}-${Date.now()}-${videoRenderAttempts}`;
+    console.log(`TranscriptListener: Setting video key to ${videoKeyValue}`);
+    setVideoKey(videoKeyValue);
+    
+    // Clear any existing visibility timer
+    if (videoVisibilityTimerRef.current) {
+      clearTimeout(videoVisibilityTimerRef.current);
+    }
+    
+    // Set video to be invisible first
+    setIsVideoVisible(false);
+    
+    // Then make it visible after a short delay to ensure clean remount
+    videoVisibilityTimerRef.current = setTimeout(() => {
+      console.log("TranscriptListener: Making video visible");
+      setIsVideoVisible(true);
+    }, 300);
+    
+    return () => {
+      if (videoVisibilityTimerRef.current) {
+        clearTimeout(videoVisibilityTimerRef.current);
+      }
+    };
+  }, [currentVideo, toast]);
 
+  // This effect handles recording status changes from props
   useEffect(() => {
     console.log("TranscriptListener: Recording status prop changed:", isRecording);
     setRecordingStatus(isRecording);
@@ -134,11 +152,7 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
             
             // Ensure video_name is always provided
             if (catalogVideo.video_name) {
-              // Reset video visibility before setting new video
-              setIsVideoVisible(false);
-              setTimeout(() => {
-                setCurrentVideo(catalogVideo);
-              }, 100);
+              setCurrentVideo(catalogVideo);
               
               toast({
                 title: "Catalog Video Found",
@@ -162,18 +176,7 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
         duration: 2000,
       });
       
-      // Clear previous video first to force proper re-rendering
-      if (currentVideo) {
-        console.log("TranscriptListener: Clearing current video before search");
-        setIsVideoVisible(false);
-        setTimeout(() => {
-          setCurrentVideo(null);
-          setCurrentVideoId(null);
-          performVideoSearch();
-        }, 300);
-      } else {
-        performVideoSearch();
-      }
+      performVideoSearch();
       
       async function performVideoSearch() {
         const searchResult = await searchAndPlayVideo(inputText);
@@ -235,6 +238,7 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
     }
   };
 
+  // Effect for processing existing voice inputs on mount - runs only once
   useEffect(() => {
     const checkForExistingInputs = () => {
       try {
@@ -300,8 +304,9 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
     return () => {
       clearInterval(buttonStateInterval);
     };
-  }, [recordingStatus, addMessage]);
+  }, []);  // Empty dependency array to ensure this only runs once
 
+  // Set up event listeners for messages and voice input - only run once on mount
   useEffect(() => {
     const captureAiMessages = (event: any) => {
       if (event.detail && event.detail.type === 'ai_message' && event.detail.text) {
@@ -370,7 +375,7 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
       window.removeEventListener('voice_input', captureVoiceInput);
       window.removeEventListener('recording_status_change', handleRecordingStatusChange);
     };
-  }, [addMessage, toast, setCurrentVideo]);
+  }, []);  // Empty dependency array to ensure this only runs once
 
   const handleVideoError = () => {
     console.error("TranscriptListener: Video error occurred with current video:", currentVideo);
@@ -396,7 +401,15 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
 
   const handleVideoClose = () => {
     console.log("TranscriptListener: Video closed by user");
+    
+    // Clear any existing visibility timer
+    if (videoVisibilityTimerRef.current) {
+      clearTimeout(videoVisibilityTimerRef.current);
+    }
+    
     setIsVideoVisible(false);
+    
+    // Use timeout to ensure smooth animation
     setTimeout(() => {
       setCurrentVideo(null);
       setCurrentVideoId(null);
@@ -411,7 +424,7 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
 
   // Log when a video should be playing but isn't
   useEffect(() => {
-    if (currentVideo && isVideoVisible && videoRenderAttempts > 0) {
+    if (currentVideo && isVideoVisible && videoKey) {
       console.log(`TranscriptListener: Video should be visible now. Key: ${videoKey}, Attempt: ${videoRenderAttempts}`);
     }
   }, [currentVideo, isVideoVisible, videoKey, videoRenderAttempts]);
@@ -433,14 +446,16 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
             )}
             data-testid="video-player-container"
           >
-            <VideoPlayer 
-              key={videoKey}
-              videoUrl={currentVideo.video_url} 
-              videoName={currentVideo.video_name || `Video related to "${currentVideo.keyword}"`}
-              onEnded={() => console.log("TranscriptListener: Video playback ended")}
-              onError={handleVideoError}
-              onClose={handleVideoClose}
-            />
+            {isVideoVisible && (
+              <VideoPlayer 
+                key={videoKey}
+                videoUrl={currentVideo.video_url} 
+                videoName={currentVideo.video_name || `Video related to "${currentVideo.keyword}"`}
+                onEnded={() => console.log("TranscriptListener: Video playback ended")}
+                onError={handleVideoError}
+                onClose={handleVideoClose}
+              />
+            )}
           </div>
         )}
         

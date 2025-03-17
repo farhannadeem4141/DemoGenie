@@ -26,9 +26,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const [isMuted, setIsMuted] = useState(true);
   const [isVertical, setIsVertical] = useState(false);
   const mountedRef = useRef(true);
-  const previousUrlRef = useRef('');
   const loadAttemptRef = useRef(0);
-  const hasInitializedRef = useRef(false);
   const [loadCount, setLoadCount] = useState(0);  // Track load attempts for debugging
 
   useEffect(() => {
@@ -47,16 +45,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       return;
     }
     
-    // Skip loading if URL hasn't changed and we've already initialized
-    if (previousUrlRef.current === videoUrl && hasInitializedRef.current) {
-      console.log("VideoPlayer: Same URL, skipping reload:", videoUrl);
-      return;
-    }
-
     console.log("VideoPlayer: Loading new video URL:", videoUrl);
-    previousUrlRef.current = videoUrl;
-    loadAttemptRef.current = 0;
-    hasInitializedRef.current = true;
     
     setErrorLoading(false);
     setIsLoading(true);
