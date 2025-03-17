@@ -83,6 +83,8 @@ export async function testVoiceInputVideoSearch(customKeyword?: string) {
     
     // Step 5: Analyze search results
     console.log('Step 5: Analyzing search results...');
+    console.log('Raw search result:', JSON.stringify(searchResult));
+    
     if (searchResult.success && searchResult.video) {
       console.log('%c ✅ VIDEO FOUND!', 'background: #4CAF50; color: white; padding: 4px; border-radius: 4px;');
       console.log('Video details:', {
@@ -97,20 +99,31 @@ export async function testVoiceInputVideoSearch(customKeyword?: string) {
       if (searchResult.video.video_url && searchResult.video.video_url.startsWith('http')) {
         console.log('✅ Video URL is valid');
         
-        // Step 7: Attempt to load video in a video element to check if URL works
+        // Step 7: Attempt to load video in a test video element to check if URL works
         console.log('Step 7: Testing if video URL loads correctly...');
         const testVideo = document.createElement('video');
         testVideo.style.display = 'none';
+        testVideo.crossOrigin = 'anonymous'; // Try with CORS settings
         testVideo.muted = true;
         
         const onLoadSuccess = () => {
           console.log('%c ✅ VIDEO URL LOADS SUCCESSFULLY!', 'background: #4CAF50; color: white; padding: 4px; border-radius: 4px;');
-          document.body.removeChild(testVideo);
+          if (document.body.contains(testVideo)) {
+            document.body.removeChild(testVideo);
+          }
         };
         
         const onLoadError = (e: any) => {
           console.error('❌ VIDEO URL FAILS TO LOAD:', e);
-          document.body.removeChild(testVideo);
+          console.log('Error details:', {
+            error: testVideo.error ? testVideo.error.code : 'No error code',
+            errorMessage: testVideo.error ? testVideo.error.message : 'No error message',
+            networkState: testVideo.networkState,
+            readyState: testVideo.readyState
+          });
+          if (document.body.contains(testVideo)) {
+            document.body.removeChild(testVideo);
+          }
         };
         
         testVideo.addEventListener('loadeddata', onLoadSuccess);
@@ -130,7 +143,16 @@ export async function testVoiceInputVideoSearch(customKeyword?: string) {
           const videoElement = transcriptListenerElement.querySelector('video');
           if (videoElement) {
             console.log('✅ Video element found in TranscriptListener');
-            console.log('Video source:', videoElement.src);
+            console.log('Video properties:', {
+              src: videoElement.src,
+              error: videoElement.error ? videoElement.error.code : 'No error',
+              errorMessage: videoElement.error ? videoElement.error.message : 'No error message',
+              networkState: videoElement.networkState,
+              readyState: videoElement.readyState,
+              currentSrc: videoElement.currentSrc,
+              paused: videoElement.paused,
+              ended: videoElement.ended
+            });
             
             if (videoElement.src === searchResult.video.video_url) {
               console.log('%c ✅ VIDEO IS PLAYING IN UI!', 'background: #4CAF50; color: white; padding: 4px; border-radius: 4px;');
@@ -141,6 +163,9 @@ export async function testVoiceInputVideoSearch(customKeyword?: string) {
             }
           } else {
             console.log('❌ No video element found in TranscriptListener');
+            
+            // Log the HTML structure of the TranscriptListener to debug
+            console.log('TranscriptListener DOM structure:', transcriptListenerElement.innerHTML);
           }
         } else {
           console.log('⚠️ TranscriptListener component not found in DOM - video will not render automatically');
@@ -168,13 +193,32 @@ export async function testVoiceInputVideoSearch(customKeyword?: string) {
                 console.log('Video source:', videoEl.src);
               } else {
                 console.log('❌ No video element found in player container');
+                console.log('Player container DOM structure:', playerContainer.innerHTML);
               }
             } else {
               console.log('❌ Video player container still not found after event dispatch');
+              console.log('All elements with data-testid attributes:');
+              document.querySelectorAll('[data-testid]').forEach(el => {
+                console.log(`- ${el.getAttribute('data-testid')}`);
+              });
+              
               console.log('Possible issues:');
               console.log('1. TranscriptListener component might not be correctly processing voice_input events');
               console.log('2. The video state in the TranscriptListener might not be updating');
               console.log('3. The video player might be hidden due to CSS issues');
+              
+              // Try one more time with a direct message to the conversation history
+              console.log('Attempting one more approach - check if useConversationHistory hook is working...');
+              
+              // Look for any setCurrentVideo functions in the global scope
+              const globalFunctions = Object.keys(window).filter(key => 
+                typeof (window as any)[key] === 'function' && 
+                key.toLowerCase().includes('video')
+              );
+              
+              if (globalFunctions.length > 0) {
+                console.log('Found potentially related global functions:', globalFunctions);
+              }
             }
           }, 1000);
         }
@@ -205,6 +249,15 @@ export async function testVoiceInputVideoSearch(customKeyword?: string) {
               console.log('❌ No videos found in direct DB search');
               console.log('Raw query used:', result.rawQuery);
               console.log('Error reason:', result.errorReason);
+              
+              // Check if the database has any videos at all
+              console.log('Checking if the database has any videos...');
+              
+              import('@/services/video/keywordSearch').then(module => {
+                module.getAllVideos().then(allVideos => {
+                  console.log('All videos in database:', allVideos);
+                });
+              });
             }
           });
         });
@@ -297,12 +350,23 @@ export function quickRepliesStorageTest() {
         if (videoEl) {
           console.log('%c ✅ VIDEO IS PLAYING IN UI!', 'background: #4CAF50; color: white; padding: 4px; border-radius: 4px;');
           console.log('Video source:', videoEl.src);
+          console.log('Video state:', {
+            networkState: videoEl.networkState,
+            readyState: videoEl.readyState,
+            error: videoEl.error ? videoEl.error.code : 'No error',
+            errorMessage: videoEl.error ? videoEl.error.message : 'No error message'
+          });
         } else {
           console.log('❌ No video element found in player container');
+          console.log('Player container contents:', playerContainer.innerHTML);
         }
       } else {
         console.log('❌ Video player container not found after event dispatch');
         console.log('Possible UI rendering or state management issues...');
+        
+        // Check if any videos are present in the DOM
+        const allVideos = document.querySelectorAll('video');
+        console.log(`Found ${allVideos.length} video elements in DOM:`, allVideos);
       }
     }, 2000);
   } catch (error) {
