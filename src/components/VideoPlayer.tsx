@@ -28,7 +28,9 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const mountedRef = useRef(true);
   const loadAttemptRef = useRef(0);
   const [loadCount, setLoadCount] = useState(0);  // Track load attempts for debugging
+  const [videoElementReady, setVideoElementReady] = useState(false);
 
+  // Effect to track component mount/unmount
   useEffect(() => {
     mountedRef.current = true;
     console.log("VideoPlayer mounted with URL:", videoUrl);
@@ -39,9 +41,31 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     };
   }, [videoUrl]);
 
+  // Effect to check if video ref is ready
   useEffect(() => {
-    if (!mountedRef.current || !videoUrl) {
-      console.log("VideoPlayer: Skipping load - component not mounted or no URL");
+    if (videoRef.current) {
+      console.log("VideoPlayer: Video element reference is ready");
+      setVideoElementReady(true);
+    } else {
+      console.log("VideoPlayer: Video element reference is not ready yet");
+      // Add a small delay and check again
+      const checkTimer = setTimeout(() => {
+        if (videoRef.current) {
+          console.log("VideoPlayer: Video element reference is now ready after delay");
+          setVideoElementReady(true);
+        } else {
+          console.error("VideoPlayer: Video element reference is still null after delay");
+        }
+      }, 100);
+      
+      return () => clearTimeout(checkTimer);
+    }
+  }, []);
+
+  // Main effect to load and play video once we have both URL and ready element
+  useEffect(() => {
+    if (!mountedRef.current || !videoUrl || !videoElementReady) {
+      console.log("VideoPlayer: Skipping load - component not mounted, no URL, or video element not ready");
       return;
     }
     
@@ -123,7 +147,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       setIsLoading(false);
       if (onError) onError();
     }
-  }, [videoUrl, onError, isMuted]);
+  }, [videoUrl, onError, isMuted, videoElementReady]);
 
   const handleVideoError = () => {
     if (!mountedRef.current) return;
@@ -204,7 +228,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   }, [errorLoading]);
 
   return (
-    <div className={cn("rounded-lg overflow-hidden shadow-lg bg-black relative", className)}>
+    <div className={cn("rounded-lg overflow-hidden shadow-lg bg-black relative", className)} data-testid="video-player-container">
       {/* Header with video name and controls */}
       <div className="bg-black/80 text-white p-2 flex justify-between items-center">
         <div className="text-sm font-medium truncate">

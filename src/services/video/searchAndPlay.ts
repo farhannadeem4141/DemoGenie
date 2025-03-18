@@ -17,6 +17,35 @@ interface VideoSearchDetails {
   };
 }
 
+// Helper to validate and sanitize video URLs
+const validateVideoUrl = (url: string): string => {
+  if (!url) return '';
+  
+  // First check if it's a valid URL format
+  try {
+    new URL(url);
+  } catch (e) {
+    console.error(`[VIDEO SEARCH] Invalid URL format: ${url}`);
+    return '';
+  }
+  
+  // Remove any query params that might be causing issues
+  try {
+    // If the URL contains extra spaces or line breaks, clean them
+    url = url.trim().replace(/\n/g, '');
+    
+    // For Supabase storage URLs, ensure they're properly formatted
+    if (url.includes('supabase.co/storage')) {
+      console.log(`[VIDEO SEARCH] Sanitizing Supabase storage URL: ${url.substring(0, 50)}...`);
+    }
+    
+    return url;
+  } catch (e) {
+    console.error(`[VIDEO SEARCH] Error sanitizing URL: ${e}`);
+    return url; // Return original if sanitizing fails
+  }
+};
+
 export async function searchAndPlayVideo(keyword: string): Promise<VideoSearchDetails> {
   console.log("%c [VIDEO SEARCH] Starting search for keyword: " + keyword, "background: #4CAF50; color: white; padding: 2px; border-radius: 4px;");
   
@@ -114,8 +143,9 @@ export async function searchAndPlayVideo(keyword: string): Promise<VideoSearchDe
       
       console.log("%c [VIDEO SEARCH] Found videos with lenient search:", "background: #4CAF50; color: white; padding: 2px; border-radius: 4px;", lenientData);
       
-      // Validate video URL
-      if (!lenientData[0].video_url || !lenientData[0].video_url.startsWith('http')) {
+      // Validate and sanitize video URL
+      const videoUrl = validateVideoUrl(lenientData[0].video_url);
+      if (!videoUrl) {
         return {
           success: false,
           errorDetails: {
@@ -133,7 +163,7 @@ export async function searchAndPlayVideo(keyword: string): Promise<VideoSearchDe
         success: true,
         video: {
           id: lenientData[0].id,
-          video_url: lenientData[0].video_url,
+          video_url: videoUrl,
           video_name: lenientData[0].video_name || `Video related to "${normalizedKeyword}"`,
           keyword: normalizedKeyword
         }
@@ -142,8 +172,9 @@ export async function searchAndPlayVideo(keyword: string): Promise<VideoSearchDe
     
     console.log("%c [VIDEO SEARCH] Found videos:", "background: #4CAF50; color: white; padding: 2px; border-radius: 4px;", data);
     
-    // Validate video URL
-    if (!data[0].video_url || !data[0].video_url.startsWith('http')) {
+    // Validate and sanitize video URL
+    const videoUrl = validateVideoUrl(data[0].video_url);
+    if (!videoUrl) {
       return {
         success: false,
         errorDetails: {
@@ -161,7 +192,7 @@ export async function searchAndPlayVideo(keyword: string): Promise<VideoSearchDe
       success: true,
       video: {
         id: data[0].id,
-        video_url: data[0].video_url,
+        video_url: videoUrl,
         video_name: data[0].video_name || `Video related to "${normalizedKeyword}"`,
         keyword: normalizedKeyword
       }
