@@ -34,32 +34,36 @@ export const validateVideoUrl = (url: string): string => {
       console.log(`[URL VALIDATOR] Detected Supabase storage URL`);
       
       // Check if the URL has a valid token
-      if (!url.includes('token=')) {
-        console.error(`[URL VALIDATOR] Supabase URL missing token parameter`);
+      if (!url.includes('token=') && !url.includes('/public/')) {
+        console.error(`[URL VALIDATOR] Supabase URL missing token parameter or not public`);
       } else {
-        console.log(`[URL VALIDATOR] Supabase URL contains token parameter`);
-        
-        // Extract and validate token expiration if possible
-        try {
-          const tokenParam = url.split('token=')[1];
-          const token = tokenParam.split('&')[0]; // Get the token value
+        if (url.includes('token=')) {
+          console.log(`[URL VALIDATOR] Supabase URL contains token parameter`);
           
-          // Try to decode the JWT to check expiration
-          const tokenParts = token.split('.');
-          if (tokenParts.length === 3) {
-            const payload = JSON.parse(atob(tokenParts[1]));
-            const expiration = payload.exp * 1000; // Convert to milliseconds
-            const now = Date.now();
+          // Extract and validate token expiration if possible
+          try {
+            const tokenParam = url.split('token=')[1];
+            const token = tokenParam.split('&')[0]; // Get the token value
             
-            if (expiration < now) {
-              console.error(`[URL VALIDATOR] Supabase token has expired! Exp: ${new Date(expiration).toISOString()}, Now: ${new Date(now).toISOString()}`);
-            } else {
-              const daysRemaining = Math.round((expiration - now) / (1000 * 60 * 60 * 24));
-              console.log(`[URL VALIDATOR] Supabase token valid for ${daysRemaining} more days`);
+            // Try to decode the JWT to check expiration
+            const tokenParts = token.split('.');
+            if (tokenParts.length === 3) {
+              const payload = JSON.parse(atob(tokenParts[1]));
+              const expiration = payload.exp * 1000; // Convert to milliseconds
+              const now = Date.now();
+              
+              if (expiration < now) {
+                console.error(`[URL VALIDATOR] Supabase token has expired! Exp: ${new Date(expiration).toISOString()}, Now: ${new Date(now).toISOString()}`);
+              } else {
+                const daysRemaining = Math.round((expiration - now) / (1000 * 60 * 60 * 24));
+                console.log(`[URL VALIDATOR] Supabase token valid for ${daysRemaining} more days`);
+              }
             }
+          } catch (e) {
+            console.warn(`[URL VALIDATOR] Could not validate token expiration:`, e);
           }
-        } catch (e) {
-          console.warn(`[URL VALIDATOR] Could not validate token expiration:`, e);
+        } else if (url.includes('/public/')) {
+          console.log(`[URL VALIDATOR] Supabase URL is using public access`);
         }
       }
       
@@ -161,6 +165,13 @@ export const extractFilenameFromUrl = (url: string): string => {
       if (objectPathMatch && objectPathMatch[1]) {
         // Decode the URL-encoded filename
         return decodeURIComponent(objectPathMatch[1]);
+      }
+      
+      // Try to extract from public URL pattern
+      const publicPathMatch = url.match(/public\/[^/]+\/([^?]+)/);
+      if (publicPathMatch && publicPathMatch[1]) {
+        // Decode the URL-encoded filename
+        return decodeURIComponent(publicPathMatch[1]);
       }
     }
     

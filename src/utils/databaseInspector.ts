@@ -1,5 +1,6 @@
 
 import { supabase } from "@/integrations/supabase/client";
+import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 
 /**
  * Utility function to fetch all videos from the database
@@ -84,8 +85,139 @@ export async function searchVideosByTagValue(tagValue: string) {
   }
 }
 
-// Run the inspection immediately when this module is imported
-inspectVideosTable();
+/**
+ * Adds a new video to the database
+ * @param videoName The name of the video
+ * @param videoUrl The URL of the video
+ * @param videoTag1 The first tag for the video 
+ * @param videoTag2 Optional second tag for the video
+ * @param videoTag3 Optional third tag for the video
+ * @returns Promise with the insert result
+ */
+export async function addVideoToDatabase(
+  videoName: string, 
+  videoUrl: string, 
+  videoTag1?: string, 
+  videoTag2?: string, 
+  videoTag3?: string
+) {
+  console.log(`Adding video to database: "${videoName}" with URL: ${videoUrl}`);
+  
+  try {
+    // Prepare the video record
+    const videoRecord = {
+      video_name: videoName,
+      video_url: videoUrl,
+      video_tag1: videoTag1 || null,
+      video_tag2: videoTag2 || null,
+      video_tag3: videoTag3 || null
+    };
+    
+    // Insert the record into the Videos table
+    const { data, error } = await supabase
+      .from('Videos')
+      .insert(videoRecord)
+      .select();
+    
+    if (error) {
+      console.error("Error adding video:", error);
+      return { success: false, data: null, error };
+    }
+    
+    console.log("Video added successfully:", data);
+    return { success: true, data };
+  } catch (error) {
+    console.error("Unexpected error adding video:", error);
+    return { success: false, data: null, error };
+  }
+}
 
-// Also run a specific search for "catalog" tag
-searchVideosByTagValue("catalog");
+/**
+ * Creates a table display of all videos in the database
+ * @returns JSX for a table of videos
+ */
+export function VideosTable() {
+  const [videos, setVideos] = React.useState<any[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
+  
+  React.useEffect(() => {
+    async function loadVideos() {
+      try {
+        const result = await inspectVideosTable();
+        if (result.success && result.data) {
+          setVideos(result.data);
+        } else {
+          setError("Failed to load videos");
+        }
+      } catch (err) {
+        setError("Error loading videos");
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    
+    loadVideos();
+  }, []);
+  
+  if (loading) {
+    return <div className="p-4 text-center">Loading videos...</div>;
+  }
+  
+  if (error) {
+    return <div className="p-4 text-center text-red-500">{error}</div>;
+  }
+  
+  if (videos.length === 0) {
+    return <div className="p-4 text-center">No videos found in database</div>;
+  }
+  
+  return (
+    <div className="w-full overflow-x-auto">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>ID</TableHead>
+            <TableHead>Name</TableHead>
+            <TableHead>URL</TableHead>
+            <TableHead>Tag 1</TableHead>
+            <TableHead>Tag 2</TableHead>
+            <TableHead>Tag 3</TableHead>
+            <TableHead>Created</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {videos.map((video) => (
+            <TableRow key={video.id}>
+              <TableCell>{video.id}</TableCell>
+              <TableCell>{video.video_name || '-'}</TableCell>
+              <TableCell className="max-w-xs truncate">{video.video_url || '-'}</TableCell>
+              <TableCell>{video.video_tag1 || '-'}</TableCell>
+              <TableCell>{video.video_tag2 || '-'}</TableCell>
+              <TableCell>{video.video_tag3 || '-'}</TableCell>
+              <TableCell>{new Date(video.created_at).toLocaleString()}</TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  );
+}
+
+// Now let's add our new video and run inspection
+(async function() {
+  console.log("Adding the new advertise video to the database...");
+  
+  const newVideoUrl = "https://boncletesuahajikgrrz.supabase.co/storage/v1/object/public/videos//How%20To%20Advertise.mp4";
+  const result = await addVideoToDatabase("advertise", newVideoUrl, "advertise");
+  
+  if (result.success) {
+    console.log("Successfully added video to database:", result.data);
+  } else {
+    console.error("Failed to add video to database:", result.error);
+  }
+  
+  // Now inspect the table to see all videos
+  await inspectVideosTable();
+})();
