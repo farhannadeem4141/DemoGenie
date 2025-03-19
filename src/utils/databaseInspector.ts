@@ -1,4 +1,5 @@
 
+import React, { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 
@@ -137,11 +138,11 @@ export async function addVideoToDatabase(
  * @returns JSX for a table of videos
  */
 export function VideosTable() {
-  const [videos, setVideos] = React.useState<any[]>([]);
-  const [loading, setLoading] = React.useState(true);
-  const [error, setError] = React.useState<string | null>(null);
+  const [videos, setVideos] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   
-  React.useEffect(() => {
+  useEffect(() => {
     async function loadVideos() {
       try {
         const result = await inspectVideosTable();
@@ -205,19 +206,5 @@ export function VideosTable() {
   );
 }
 
-// Now let's add our new video and run inspection
-(async function() {
-  console.log("Adding the new advertise video to the database...");
-  
-  const newVideoUrl = "https://boncletesuahajikgrrz.supabase.co/storage/v1/object/public/videos//How%20To%20Advertise.mp4";
-  const result = await addVideoToDatabase("advertise", newVideoUrl, "advertise");
-  
-  if (result.success) {
-    console.log("Successfully added video to database:", result.data);
-  } else {
-    console.error("Failed to add video to database:", result.error);
-  }
-  
-  // Now inspect the table to see all videos
-  await inspectVideosTable();
-})();
+// Remove the self-executing function to avoid automatic execution during import
+// This should be called explicitly from another component when needed
