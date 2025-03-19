@@ -39,7 +39,8 @@ const Database = () => {
         toast({
           title: "Video May Not Be Playable",
           description: "The URL was validated but the video may not play correctly",
-          variant: "warning"
+          // Changed from "warning" to "default"
+          variant: "default"
         });
       }
       
@@ -104,7 +105,8 @@ const Database = () => {
         toast({
           title: "Video May Not Be Playable",
           description: "The URL was validated but the video may not play correctly",
-          variant: "warning"
+          // Changed from "warning" to "default"
+          variant: "default"
         });
       }
       
