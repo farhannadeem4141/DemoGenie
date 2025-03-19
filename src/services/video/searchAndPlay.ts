@@ -22,6 +22,9 @@ export async function searchAndPlayVideo(keyword: string): Promise<VideoSearchDe
   console.log("%c [VIDEO SEARCH] ========== SEARCH START ==========", "background: #4CAF50; color: white; padding: 4px; border-radius: 4px; font-weight: bold;");
   console.log("%c [VIDEO SEARCH] Starting search for keyword: " + keyword, "background: #4CAF50; color: white; padding: 2px; border-radius: 4px;");
   
+  // Define fallback video URL
+  const fallbackVideoUrl = "https://boncletesuahajikgrrz.supabase.co/storage/v1/object/public/videos//How%20To%20Advertise.mp4";
+  
   try {
     // Clean and normalize the keyword for search
     if (!keyword || keyword.trim() === '') {
@@ -137,63 +140,29 @@ export async function searchAndPlayVideo(keyword: string): Promise<VideoSearchDe
       
       if (!lenientData || lenientData.length === 0) {
         console.log("%c [VIDEO SEARCH] Even lenient search returned no results", "background: #f44336; color: white; padding: 2px; border-radius: 4px;");
-        console.log("%c [VIDEO SEARCH] Checking if any videos exist at all...", "background: #4CAF50; color: white; padding: 2px; border-radius: 4px;");
+        console.log("%c [VIDEO SEARCH] Using fallback video instead...", "background: #4CAF50; color: white; padding: 2px; border-radius: 4px;");
         
-        // Check if any videos exist as a fallback
-        const { data: fallbackVideo, error: fallbackError } = await supabase
-          .from('Videos')
-          .select('*')
-          .limit(1)
-          .single();
+        // Use the fallback video URL directly instead of querying for a fallback
+        const validatedFallbackUrl = validateVideoUrl(fallbackVideoUrl);
         
-        if (fallbackError || !fallbackVideo) {
-          console.error("%c [VIDEO SEARCH] No videos exist in the database at all!", "background: #f44336; color: white; padding: 2px; border-radius: 4px;", fallbackError);
-          return {
-            success: false,
-            errorDetails: {
-              step: 'no_results',
-              message: `No videos found for keyword "${normalizedKeyword}" and no fallback videos available`,
-              technicalDetails: {
-                keyword: normalizedKeyword,
-                searchMethod: 'exhausted all search options'
-              }
-            }
-          };
-        }
-        
-        console.log("%c [VIDEO SEARCH] Using fallback video:", "background: #ff9800; color: white; padding: 2px; border-radius: 4px;");
-        console.table([{ 
-          id: fallbackVideo.id, 
-          name: fallbackVideo.video_name, 
-          url: fallbackVideo.video_url?.substring(0, 30) + '...',
-          tag1: fallbackVideo.video_tag1,
-          tag2: fallbackVideo.video_tag2,
-          tag3: fallbackVideo.video_tag3
-        }]);
-        
-        // Validate the fallback video URL
-        const videoUrl = validateVideoUrl(fallbackVideo.video_url);
-        if (!videoUrl) {
-          console.error("%c [VIDEO SEARCH] Fallback video has invalid URL:", "background: #f44336; color: white; padding: 2px; border-radius: 4px;", fallbackVideo.video_url);
+        if (!validatedFallbackUrl) {
+          console.error("%c [VIDEO SEARCH] Fallback video has invalid URL:", "background: #f44336; color: white; padding: 2px; border-radius: 4px;", fallbackVideoUrl);
           return {
             success: false,
             errorDetails: {
               step: 'url_validation',
-              message: `Fallback video has invalid URL: ${fallbackVideo.video_url || 'empty'}`,
-              technicalDetails: {
-                record: fallbackVideo
-              }
+              message: `Fallback video has invalid URL: ${fallbackVideoUrl || 'empty'}`,
             }
           };
         }
         
-        console.log("%c [VIDEO SEARCH] Using fallback video as last resort", "background: #ff9800; color: white; padding: 2px; border-radius: 4px;");
+        console.log("%c [VIDEO SEARCH] Using hardcoded fallback video as last resort", "background: #ff9800; color: white; padding: 2px; border-radius: 4px;");
         return {
           success: true,
           video: {
-            id: fallbackVideo.id,
-            video_url: videoUrl,
-            video_name: fallbackVideo.video_name || 'Fallback Video',
+            id: 999,  // Use a dummy ID for the fallback video
+            video_url: validatedFallbackUrl,
+            video_name: 'How To Advertise',
             keyword: normalizedKeyword
           }
         };
