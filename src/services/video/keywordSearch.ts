@@ -1,3 +1,4 @@
+
 import { supabase } from '@/integrations/supabase/client';
 import { VideoSearchResult } from './types';
 
@@ -19,6 +20,9 @@ export async function searchVideosByKeyword(keyword: string): Promise<VideoSearc
     const icontainsQuery = `video_tag1.ilike.%${normalizedKeyword}%,video_tag2.ilike.%${normalizedKeyword}%,video_tag3.ilike.%${normalizedKeyword}%`;
     
     query = query.or(exactQuery + ',' + icontainsQuery);
+    
+    // Add additional logging for debugging the issue with "encryption" keyword
+    console.log("%c [DB QUERY] Search details - looking for: " + normalizedKeyword, "background: #ff9e00; color: black; padding: 2px; border-radius: 4px;");
     
     // Generate query string for logging (without toSql method)
     const queryString = `SELECT * FROM "Videos" WHERE ${exactQuery} OR ${icontainsQuery}`;
