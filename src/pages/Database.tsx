@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { VideosTable, addVideoToDatabase, inspectVideosTable } from '@/utils/databaseInspector';
 import { validateVideoUrl, testVideoPlayability } from '@/services/video/videoUrlValidator';
@@ -20,6 +19,9 @@ const Database = () => {
   // Advertise video case for the task
   const advertiseVideoUrl = "https://boncletesuahajikgrrz.supabase.co/storage/v1/object/public/videos//How%20To%20Advertise.mp4";
 
+  // WhatsApp encryption video for fallback
+  const fallbackVideoUrl = "https://boncletesuahajikgrrz.supabase.co/storage/v1/object/public/videos//WhatsApp%20end-to-end%20encryption.mp4";
+
   const handleAddAdvertiseVideo = async () => {
     setIsSubmitting(true);
     
@@ -39,7 +41,6 @@ const Database = () => {
         toast({
           title: "Video May Not Be Playable",
           description: "The URL was validated but the video may not play correctly",
-          // Changed from "warning" to "default"
           variant: "default"
         });
       }
@@ -66,6 +67,63 @@ const Database = () => {
       }
     } catch (error) {
       console.error("Error adding advertise video:", error);
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred",
+        variant: "destructive"
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleAddFallbackVideo = async () => {
+    setIsSubmitting(true);
+    
+    try {
+      const validatedUrl = validateVideoUrl(fallbackVideoUrl);
+      if (!validatedUrl) {
+        toast({
+          title: "Invalid URL",
+          description: "The video URL is not valid",
+          variant: "destructive"
+        });
+        return;
+      }
+      
+      const isPlayable = await testVideoPlayability(validatedUrl);
+      if (!isPlayable) {
+        toast({
+          title: "Video May Not Be Playable",
+          description: "The URL was validated but the video may not play correctly",
+          variant: "default"
+        });
+      }
+      
+      const result = await addVideoToDatabase(
+        "WhatsApp end-to-end encryption", 
+        fallbackVideoUrl,
+        "encryption",
+        "security",
+        "privacy"
+      );
+      
+      if (result.success) {
+        toast({
+          title: "Success",
+          description: "Fallback video added to database",
+        });
+        // Trigger refresh of the table
+        setRefreshTrigger(prev => prev + 1);
+      } else {
+        toast({
+          title: "Error",
+          description: "Failed to add video to database",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error("Error adding fallback video:", error);
       toast({
         title: "Error",
         description: "An unexpected error occurred",
@@ -105,7 +163,6 @@ const Database = () => {
         toast({
           title: "Video May Not Be Playable",
           description: "The URL was validated but the video may not play correctly",
-          // Changed from "warning" to "default"
           variant: "default"
         });
       }
@@ -274,18 +331,34 @@ const Database = () => {
         <VideosTable key={refreshTrigger} />
       </div>
       
-      <div className="mt-8 p-4 bg-blue-50 rounded-lg">
-        <h3 className="font-medium mb-2">Add Advertise Video</h3>
-        <p className="text-sm mb-3">
-          Add the advertise video with URL: {advertiseVideoUrl}
-        </p>
-        <Button 
-          onClick={handleAddAdvertiseVideo}
-          variant="secondary"
-          disabled={isSubmitting}
-        >
-          Add Advertise Video
-        </Button>
+      <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="p-4 bg-blue-50 rounded-lg">
+          <h3 className="font-medium mb-2">Add Advertise Video</h3>
+          <p className="text-sm mb-3">
+            Add the advertise video with URL: {advertiseVideoUrl.substring(0, 30)}...
+          </p>
+          <Button 
+            onClick={handleAddAdvertiseVideo}
+            variant="secondary"
+            disabled={isSubmitting}
+          >
+            Add Advertise Video
+          </Button>
+        </div>
+        
+        <div className="p-4 bg-green-50 rounded-lg">
+          <h3 className="font-medium mb-2">Add Fallback Video</h3>
+          <p className="text-sm mb-3">
+            Add the WhatsApp encryption video with URL: {fallbackVideoUrl.substring(0, 30)}...
+          </p>
+          <Button 
+            onClick={handleAddFallbackVideo}
+            variant="secondary"
+            disabled={isSubmitting}
+          >
+            Add Fallback Video
+          </Button>
+        </div>
       </div>
     </div>
   );

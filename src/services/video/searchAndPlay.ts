@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { VideoSearchResult } from './types';
 import { validateVideoUrl } from './videoUrlValidator';
@@ -22,8 +21,8 @@ export async function searchAndPlayVideo(keyword: string): Promise<VideoSearchDe
   console.log("%c [VIDEO SEARCH] ========== SEARCH START ==========", "background: #4CAF50; color: white; padding: 4px; border-radius: 4px; font-weight: bold;");
   console.log("%c [VIDEO SEARCH] Starting search for keyword: " + keyword, "background: #4CAF50; color: white; padding: 2px; border-radius: 4px;");
   
-  // Define fallback video URL
-  const fallbackVideoUrl = "https://boncletesuahajikgrrz.supabase.co/storage/v1/object/public/videos//How%20To%20Advertise.mp4";
+  // Define fallback video URL - Updated to WhatsApp encryption video
+  const fallbackVideoUrl = "https://boncletesuahajikgrrz.supabase.co/storage/v1/object/public/videos//WhatsApp%20end-to-end%20encryption.mp4";
   
   try {
     // Clean and normalize the keyword for search
@@ -160,9 +159,9 @@ export async function searchAndPlayVideo(keyword: string): Promise<VideoSearchDe
         return {
           success: true,
           video: {
-            id: 999,  // Use a dummy ID for the fallback video
+            id: 3,  // Updated to ID 3 as specified
             video_url: validatedFallbackUrl,
-            video_name: 'How To Advertise',
+            video_name: 'WhatsApp end-to-end encryption',
             keyword: normalizedKeyword
           }
         };

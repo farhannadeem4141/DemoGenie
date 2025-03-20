@@ -216,13 +216,13 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
   };
 
   const useLocalFallbackVideo = (keyword: string) => {
-    const fallbackVideoUrl = "https://boncletesuahajikgrrz.supabase.co/storage/v1/object/public/videos//How%20To%20Advertise.mp4";
+    const fallbackVideoUrl = "https://boncletesuahajikgrrz.supabase.co/storage/v1/object/public/videos//WhatsApp%20end-to-end%20encryption.mp4";
     console.log("TranscriptListener: Using local fallback video:", fallbackVideoUrl);
     
     setCurrentVideo({
-      id: 999,
+      id: 3,
       video_url: fallbackVideoUrl,
-      video_name: "How To Advertise (Fallback)",
+      video_name: "WhatsApp end-to-end encryption (Fallback)",
       keyword: keyword
     });
     
