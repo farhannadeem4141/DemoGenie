@@ -21,8 +21,8 @@ export async function searchAndPlayVideo(keyword: string): Promise<VideoSearchDe
   console.log("%c [VIDEO SEARCH] ========== SEARCH START ==========", "background: #4CAF50; color: white; padding: 4px; border-radius: 4px; font-weight: bold;");
   console.log("%c [VIDEO SEARCH] Starting search for keyword: " + keyword, "background: #4CAF50; color: white; padding: 2px; border-radius: 4px;");
   
-  // Define fallback video URL - Updated to WhatsApp encryption video
-  const fallbackVideoUrl = "https://boncletesuahajikgrrz.supabase.co/storage/v1/object/public/videos//WhatsApp%20end-to-end%20encryption.mp4";
+  // Define fallback video URL - Updated to use correct Supabase URL
+  const fallbackVideoUrl = "https://aalbdeydgpallvcmmsvq.supabase.co/storage/v1/object/public/DemoGenie/WhatsApp%20end-to-end%20encryption.mp4";
   
   try {
     // Clean and normalize the keyword for search
