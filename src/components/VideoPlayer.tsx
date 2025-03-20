@@ -27,127 +27,105 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const [isVertical, setIsVertical] = useState(false);
   const mountedRef = useRef(true);
   const loadAttemptRef = useRef(0);
-  const [loadCount, setLoadCount] = useState(0);  // Track load attempts for debugging
-  const [videoElementReady, setVideoElementReady] = useState(false);
-
-  // Effect to track component mount/unmount
+  const [loadCount, setLoadCount] = useState(0);
+  const [isRefReady, setIsRefReady] = useState(false);
+  
+  // Check if video ref is available immediately after mount
   useEffect(() => {
     mountedRef.current = true;
     console.log("VideoPlayer mounted with URL:", videoUrl);
     
+    // Small delay to ensure DOM is fully rendered before checking ref
+    const initTimer = setTimeout(() => {
+      if (videoRef.current) {
+        console.log("VideoPlayer: Video element reference is ready");
+        setIsRefReady(true);
+      } else {
+        console.error("VideoPlayer: Video element reference is still null after init");
+      }
+    }, 100);
+    
     return () => {
       console.log("VideoPlayer unmounting, last URL was:", videoUrl);
       mountedRef.current = false;
+      clearTimeout(initTimer);
     };
   }, [videoUrl]);
 
-  // Effect to check if video ref is ready
+  // Main effect to load and play video once we know ref is ready
   useEffect(() => {
-    if (videoRef.current) {
-      console.log("VideoPlayer: Video element reference is ready");
-      setVideoElementReady(true);
-    } else {
-      console.log("VideoPlayer: Video element reference is not ready yet");
-      // Add a small delay and check again
-      const checkTimer = setTimeout(() => {
-        if (videoRef.current) {
-          console.log("VideoPlayer: Video element reference is now ready after delay");
-          setVideoElementReady(true);
-        } else {
-          console.error("VideoPlayer: Video element reference is still null after delay");
-        }
-      }, 100);
-      
-      return () => clearTimeout(checkTimer);
-    }
-  }, []);
-
-  // Main effect to load and play video once we have both URL and ready element
-  useEffect(() => {
-    if (!mountedRef.current || !videoUrl || !videoElementReady) {
+    if (!mountedRef.current || !videoUrl || !isRefReady || !videoRef.current) {
       console.log("VideoPlayer: Skipping load - component not mounted, no URL, or video element not ready");
       return;
     }
     
-    console.log("VideoPlayer: Loading new video URL:", videoUrl);
+    console.log("VideoPlayer: Loading new video URL with ready ref:", videoUrl);
     
     setErrorLoading(false);
     setIsLoading(true);
-    setLoadCount(prev => prev + 1);  // Increment load counter
+    setLoadCount(prev => prev + 1);
     
-    if (videoRef.current) {
-      videoRef.current.muted = isMuted;
-      
-      try {
-        console.log("VideoPlayer: Setting video src and loading...");
-        videoRef.current.src = videoUrl;
-        videoRef.current.load();
-      } catch (e) {
-        console.error("VideoPlayer: Error setting source or loading:", e);
-        setErrorLoading(true);
-        setIsLoading(false);
-        if (onError) onError();
-        return;
-      }
-      
-      const handleLoadedMetadata = () => {
-        if (!mountedRef.current) return;
-        
-        console.log("VideoPlayer: Video metadata loaded successfully");
-        
-        if (videoRef.current) {
-          try {
-            const isPortrait = videoRef.current.videoHeight > videoRef.current.videoWidth;
-            setIsVertical(isPortrait);
-            console.log("VideoPlayer: Video dimensions", {
-              width: videoRef.current.videoWidth,
-              height: videoRef.current.videoHeight,
-              isPortrait
-            });
-          } catch (e) {
-            console.error("VideoPlayer: Error determining video orientation:", e);
-          }
-        }
-        
-        setIsLoading(false);
-        
-        if (videoRef.current) {
-          console.log("VideoPlayer: Attempting to play video...");
-          videoRef.current.play()
-            .then(() => {
-              console.log("VideoPlayer: Video started playing successfully");
-            })
-            .catch(err => {
-              console.error("VideoPlayer: Error playing video:", err);
-              if (mountedRef.current) {
-                setErrorLoading(true);
-              }
-              if (onError) onError();
-            });
-        }
-      };
-      
-      const handleLoadError = (e: Event) => {
-        console.error("VideoPlayer: Video failed to load event triggered:", e);
-        handleVideoError();
-      };
-      
-      videoRef.current.addEventListener('loadedmetadata', handleLoadedMetadata);
-      videoRef.current.addEventListener('error', handleLoadError);
-      
-      return () => {
-        if (videoRef.current) {
-          videoRef.current.removeEventListener('loadedmetadata', handleLoadedMetadata);
-          videoRef.current.removeEventListener('error', handleLoadError);
-        }
-      };
-    } else {
-      console.error("VideoPlayer: Video reference is null, cannot set up video");
+    const videoElement = videoRef.current;
+    videoElement.muted = isMuted;
+    
+    try {
+      console.log("VideoPlayer: Setting video src and loading...");
+      videoElement.src = videoUrl;
+      videoElement.load();
+    } catch (e) {
+      console.error("VideoPlayer: Error setting source or loading:", e);
       setErrorLoading(true);
       setIsLoading(false);
       if (onError) onError();
+      return;
     }
-  }, [videoUrl, onError, isMuted, videoElementReady]);
+    
+    const handleLoadedMetadata = () => {
+      if (!mountedRef.current) return;
+      
+      console.log("VideoPlayer: Video metadata loaded successfully");
+      
+      try {
+        const isPortrait = videoElement.videoHeight > videoElement.videoWidth;
+        setIsVertical(isPortrait);
+        console.log("VideoPlayer: Video dimensions", {
+          width: videoElement.videoWidth,
+          height: videoElement.videoHeight,
+          isPortrait
+        });
+      } catch (e) {
+        console.error("VideoPlayer: Error determining video orientation:", e);
+      }
+      
+      setIsLoading(false);
+      
+      console.log("VideoPlayer: Attempting to play video...");
+      videoElement.play()
+        .then(() => {
+          console.log("VideoPlayer: Video started playing successfully");
+        })
+        .catch(err => {
+          console.error("VideoPlayer: Error playing video:", err);
+          if (mountedRef.current) {
+            setErrorLoading(true);
+          }
+          if (onError) onError();
+        });
+    };
+    
+    const handleLoadError = (e: Event) => {
+      console.error("VideoPlayer: Video failed to load event triggered:", e);
+      handleVideoError();
+    };
+    
+    videoElement.addEventListener('loadedmetadata', handleLoadedMetadata);
+    videoElement.addEventListener('error', handleLoadError);
+    
+    return () => {
+      videoElement.removeEventListener('loadedmetadata', handleLoadedMetadata);
+      videoElement.removeEventListener('error', handleLoadError);
+    };
+  }, [videoUrl, onError, isMuted, isRefReady]);
 
   const handleVideoError = () => {
     if (!mountedRef.current) return;
@@ -169,33 +147,31 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   };
 
   const retryLoading = () => {
-    if (!mountedRef.current) return;
+    if (!mountedRef.current || !videoRef.current) return;
     
     console.log("VideoPlayer: Retrying video load:", videoUrl);
     setErrorLoading(false);
     setIsLoading(true);
-    setLoadCount(prev => prev + 1);  // Increment load counter
+    setLoadCount(prev => prev + 1);
     
-    if (videoRef.current) {
-      try {
-        videoRef.current.src = videoUrl;
-        videoRef.current.load();
-        videoRef.current.play()
-          .then(() => console.log("VideoPlayer: Retry play successful"))
-          .catch(err => {
-            console.error("VideoPlayer: Retry play failed:", err);
-            if (mountedRef.current) {
-              setErrorLoading(true);
-              setIsLoading(false);
-              if (onError) onError();
-            }
-          });
-      } catch (e) {
-        console.error("VideoPlayer: Error during retry:", e);
-        setErrorLoading(true);
-        setIsLoading(false);
-        if (onError) onError();
-      }
+    try {
+      videoRef.current.src = videoUrl;
+      videoRef.current.load();
+      videoRef.current.play()
+        .then(() => console.log("VideoPlayer: Retry play successful"))
+        .catch(err => {
+          console.error("VideoPlayer: Retry play failed:", err);
+          if (mountedRef.current) {
+            setErrorLoading(true);
+            setIsLoading(false);
+            if (onError) onError();
+          }
+        });
+    } catch (e) {
+      console.error("VideoPlayer: Error during retry:", e);
+      setErrorLoading(true);
+      setIsLoading(false);
+      if (onError) onError();
     }
   };
 
