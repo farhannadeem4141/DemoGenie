@@ -3,9 +3,10 @@ import { useConversationHistory } from '@/hooks/useConversationHistory';
 import VideoPlayer from './VideoPlayer';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
-import { queryVideosWithCatalogTag, fetchVideos } from '@/services/video';
+import { queryVideosWithCatalogTag, fetchVideosWithDetails } from '@/services/video';
 import { searchAndPlayVideo } from '@/services/video/searchAndPlay';
 import { VideoFixer } from '@/utils/videoFixerUtil';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 
 interface TranscriptListenerProps {
   className?: string;
@@ -29,6 +30,34 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
   const [videoRenderAttempts, setVideoRenderAttempts] = useState(0);
   const videoErrorsRef = useRef<string[]>([]);
   const videoVisibilityTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [isSearching, setIsSearching] = useState(false);
+  const transcriptWatcherRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const watchTranscript = () => {
+      let lastTranscript = localStorage.getItem('transcript') || '';
+      
+      const checkTranscript = () => {
+        const currentTranscript = localStorage.getItem('transcript') || '';
+        if (currentTranscript !== lastTranscript && currentTranscript.trim()) {
+          console.log("TranscriptListener: Detected new transcript in localStorage:", currentTranscript);
+          lastTranscript = currentTranscript;
+          handleVoiceInput(currentTranscript);
+        }
+      };
+      
+      transcriptWatcherRef.current = window.setInterval(checkTranscript, 1000);
+    };
+    
+    watchTranscript();
+    
+    return () => {
+      if (transcriptWatcherRef.current) {
+        clearInterval(transcriptWatcherRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!currentVideo) {
@@ -52,6 +81,7 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
     if (!currentVideo.video_url || !currentVideo.video_url.startsWith('http')) {
       console.error("TranscriptListener: Invalid video URL", currentVideo.video_url);
       videoErrorsRef.current.push(`Invalid video URL: ${currentVideo.video_url?.substring(0, 30)}...`);
+      setSearchError(`Invalid video URL format: ${currentVideo.video_url?.substring(0, 30)}...`);
       toast({
         variant: "destructive",
         title: "Video Error",
@@ -76,6 +106,7 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
     videoVisibilityTimerRef.current = setTimeout(() => {
       console.log("TranscriptListener: Making video visible");
       setIsVideoVisible(true);
+      setSearchError(null);
     }, 300);
     
     return () => {
@@ -90,14 +121,11 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
     setRecordingStatus(isRecording);
   }, [isRecording]);
 
-  // Add video fixer utility
   useEffect(() => {
-    // Initialize the video fixer in development mode 
     if (process.env.NODE_ENV === 'development') {
       console.log("Initializing video fixer utility in dev mode");
       VideoFixer.addTestButton();
       
-      // Run an initial check but don't fix automatically
       setTimeout(() => {
         VideoFixer.checkAllVideos().then(result => {
           console.log("Initial video health check complete:", result);
@@ -109,6 +137,7 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
   const handleVoiceInput = async (inputText: string) => {
     if (!inputText || inputText.trim() === '') {
       console.log("TranscriptListener: Empty voice input, skipping");
+      setSearchError("Empty voice input, cannot search for videos");
       return;
     }
     
@@ -122,10 +151,13 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
     
     if (processingKeywordRef.current) {
       console.log("TranscriptListener: Already processing a keyword, skipping this input");
+      setSearchError("Already processing a previous search, please wait");
       return;
     }
     
     processingKeywordRef.current = true;
+    setIsSearching(true);
+    setSearchError(null);
     
     addMessage({
       text: inputText,
@@ -134,7 +166,6 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
     });
     
     try {
-      // Save to localStorage for transcript-based search
       localStorage.setItem('transcript', inputText);
       
       const savedInputs = JSON.parse(localStorage.getItem('voice_input_history') || '[]');
@@ -173,11 +204,13 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
             }
             
             processingKeywordRef.current = false;
+            setIsSearching(false);
             return;
           }
         } catch (error) {
           console.error("TranscriptListener: Error in direct catalog query:", error);
           videoErrorsRef.current.push(`Catalog query error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+          setSearchError(`Catalog query error: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
       }
       
@@ -187,18 +220,16 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
         duration: 2000,
       });
 
-      // Try the new transcript-based approach first
       try {
-        console.log("TranscriptListener: Trying transcript-based search first");
-        const videoUrls = await fetchVideos();
+        console.log("TranscriptListener: Trying transcript-based search with details");
+        const result = await fetchVideosWithDetails();
         
-        if (videoUrls && videoUrls.length > 0) {
-          console.log("TranscriptListener: Found videos with transcript search:", videoUrls);
+        if (result.success && result.videos.length > 0) {
+          console.log("TranscriptListener: Found videos with transcript search:", result.videos);
           
-          // Use the first video
           setCurrentVideo({
-            id: Date.now(), // Use timestamp as a temporary ID
-            video_url: videoUrls[0],
+            id: Date.now(),
+            video_url: result.videos[0],
             video_name: "Video from transcript search",
             keyword: inputText
           });
@@ -210,12 +241,16 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
           });
           
           processingKeywordRef.current = false;
+          setIsSearching(false);
           return;
         } else {
+          console.log("TranscriptListener: Transcript search error:", result.error);
+          setSearchError(`Transcript search error: ${result.error}`);
           console.log("TranscriptListener: No videos found with transcript search, falling back to keyword search");
         }
       } catch (transcriptError) {
         console.error("TranscriptListener: Error in transcript search:", transcriptError);
+        setSearchError(`Transcript search exception: ${transcriptError instanceof Error ? transcriptError.message : 'Unknown error'}`);
       }
       
       try {
@@ -239,17 +274,21 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
             description: `Now playing: ${searchResult.video.video_name}`,
             duration: 3000,
           });
+          setSearchError(null);
         } else {
           console.error("TranscriptListener: Video search failed:", searchResult.errorDetails);
+          setSearchError(`Video search failed: ${searchResult.errorDetails || 'No matching videos found'}`);
           useLocalFallbackVideo(inputText);
         }
       } catch (error) {
         console.error("TranscriptListener: Error in video search:", error);
+        setSearchError(`Video search error: ${error instanceof Error ? error.message : 'Unknown error'}`);
         useLocalFallbackVideo(inputText);
       }
     } catch (error) {
       console.error("TranscriptListener: Error processing voice input:", error);
       videoErrorsRef.current.push(`Voice input processing error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      setSearchError(`Voice input processing error: ${error instanceof Error ? error.message : 'Unknown error'}`);
       
       toast({
         variant: "destructive",
@@ -262,6 +301,7 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
     } finally {
       setTimeout(() => {
         processingKeywordRef.current = false;
+        setIsSearching(false);
       }, 1000);
     }
   };
@@ -479,6 +519,23 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
           <div className="mb-3 flex items-center justify-center bg-red-500 text-white p-2 rounded-lg shadow-lg animate-pulse">
             Recording Active
           </div>
+        )}
+        
+        {isSearching && !currentVideo && (
+          <div className="mb-3 flex items-center justify-center bg-blue-500 text-white p-2 rounded-lg shadow-lg">
+            <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            Searching for videos...
+          </div>
+        )}
+
+        {searchError && !currentVideo && (
+          <Alert variant="destructive" className="mb-3">
+            <AlertTitle>Error Finding Video</AlertTitle>
+            <AlertDescription>{searchError}</AlertDescription>
+          </Alert>
         )}
 
         {currentVideo && currentVideo.video_url && (
