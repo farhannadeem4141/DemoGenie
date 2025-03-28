@@ -12,7 +12,11 @@ import {
   releaseVideoLoadingLock,
   queueVideoRequest,
   isProcessingVideo,
-  resetVideoLoadingState 
+  resetVideoLoadingState,
+  isNewTranscript,
+  validateSearchKeyword,
+  setVideoElementReady,
+  isVideoElementReady
 } from '@/utils/videoLoadingManager';
 
 interface TranscriptListenerProps {
@@ -43,34 +47,110 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
   const transcriptWatcherRef = useRef<number | null>(null);
   const lastSearchTimestampRef = useRef<number>(0);
   const currentVideoRequestRef = useRef<string | null>(null);
+  const videoPlayerReadyRef = useRef<boolean>(false);
+  const [transcriptStabilityTimer, setTranscriptStabilityTimer] = useState<NodeJS.Timeout | null>(null);
 
+  // Check if the Vapi button is visible (indicating if voice assistants are active)
+  const checkVapiButtonVisibility = () => {
+    const vapiButton = document.querySelector('[id^="vapi-support-btn"]');
+    const isVisible = !!vapiButton && 
+      !vapiButton.classList.contains('hidden') && 
+      !(vapiButton as HTMLElement).style.display?.includes('none');
+    console.log("TranscriptListener: Vapi button visibility check:", isVisible);
+    return isVisible;
+  };
+
+  // Set up a listener for the video player ready state
+  const handleVideoPlayerReady = (isReady: boolean) => {
+    console.log(`TranscriptListener: Video player reported ready state: ${isReady}`);
+    videoPlayerReadyRef.current = isReady;
+    setVideoElementReady(isReady);
+    
+    // If we have a pending video and the player just became ready, try to display it
+    if (isReady && currentVideo && !isVideoVisible) {
+      console.log("TranscriptListener: Video player just became ready with pending video, displaying it");
+      
+      // Generate a new request ID for this operation
+      const requestId = `video-ready-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+      
+      // Only proceed if we can acquire a lock
+      if (acquireVideoLoadingLock(requestId)) {
+        try {
+          const videoKeyValue = `video-${currentVideo.id}-${Date.now()}-${videoRenderAttempts}-ready`;
+          console.log(`TranscriptListener: Setting video key to ${videoKeyValue}`);
+          
+          setVideoKey(videoKeyValue);
+          setCurrentVideoId(currentVideo.id);
+          setCurrentVideoUrl(currentVideo.video_url);
+          
+          // Show the video after a short delay to give time for the component to update
+          setTimeout(() => {
+            setIsVideoVisible(true);
+            setSearchError(null);
+            releaseVideoLoadingLock(requestId);
+            
+            toast({
+              title: "Video Ready",
+              description: `Now playing: ${currentVideo.video_name || currentVideo.keyword}`,
+              duration: 3000,
+            });
+          }, 300);
+        } catch (e) {
+          console.error("TranscriptListener: Error displaying ready video:", e);
+          releaseVideoLoadingLock(requestId);
+        }
+      }
+    }
+  };
+
+  // Improved transcript watcher with stability timer for better transcript processing
   useEffect(() => {
     const watchTranscript = () => {
-      console.log("TranscriptListener: Setting up enhanced transcript watcher");
+      console.log("TranscriptListener: Setting up enhanced transcript watcher with stability");
       
+      // Override localStorage.setItem to detect real-time changes
       const originalSetItem = localStorage.setItem;
       localStorage.setItem = function(key, value) {
         originalSetItem.apply(this, [key, value]);
         
+        // Only process transcript changes
         if (key === 'transcript') {
-          console.log(`TranscriptListener: Detected real-time change to transcript: "${value}"`);
+          console.log(`TranscriptListener: Detected change to transcript: "${value}"`);
           
-          if (value && value.trim() && value !== lastProcessedInputRef.current) {
-            handleVoiceInput(value);
+          // Clear any existing stability timer
+          if (transcriptStabilityTimer) {
+            clearTimeout(transcriptStabilityTimer);
           }
+          
+          // Set a new stability timer to wait for transcript to stabilize
+          const timer = setTimeout(() => {
+            const currentTranscript = localStorage.getItem('transcript') || '';
+            console.log(`TranscriptListener: Processing stabilized transcript: "${currentTranscript}"`);
+            
+            if (currentTranscript && currentTranscript.trim() && 
+                isNewTranscript(currentTranscript)) {
+              handleVoiceInput(currentTranscript);
+            }
+          }, 1500); // Wait 1.5 seconds for transcript to stabilize
+          
+          setTranscriptStabilityTimer(timer);
         }
       };
       
+      // Check periodically for transcript changes that might have been missed
       transcriptWatcherRef.current = window.setInterval(() => {
         const currentTranscript = localStorage.getItem('transcript') || '';
-        if (currentTranscript !== lastProcessedInputRef.current && currentTranscript.trim()) {
+        if (currentTranscript !== lastProcessedInputRef.current && 
+            currentTranscript.trim() && 
+            isNewTranscript(currentTranscript)) {
           console.log("TranscriptListener: Detected new transcript via interval check:", currentTranscript);
           handleVoiceInput(currentTranscript);
         }
-      }, 1000);
+      }, 2000); // Check every 2 seconds
       
+      // Check for any initial transcript value
       const initialTranscript = localStorage.getItem('transcript');
-      if (initialTranscript && initialTranscript.trim()) {
+      if (initialTranscript && initialTranscript.trim() && isNewTranscript(initialTranscript)) {
         console.log("TranscriptListener: Found initial transcript value:", initialTranscript);
         handleVoiceInput(initialTranscript);
       }
@@ -78,12 +158,41 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
     
     watchTranscript();
     
+    // Setup event listener for video player ready status
+    window.addEventListener('video_player_ready', (e: any) => {
+      handleVideoPlayerReady(e.detail?.isReady ?? false);
+    });
+    
+    // Listen for pending video processing events
+    window.addEventListener('process_pending_video', (e: CustomEvent<any>) => {
+      if (e.detail) {
+        console.log("TranscriptListener: Processing pending video request:", e.detail);
+        handleVideoRequest({
+          id: e.detail.id,
+          url: e.detail.url,
+          name: e.detail.name,
+          keyword: e.detail.keyword
+        });
+      }
+    });
+    
+    // Clean up all timers and listeners on unmount
     return () => {
       if (transcriptWatcherRef.current) {
         clearInterval(transcriptWatcherRef.current);
       }
+      
+      if (transcriptStabilityTimer) {
+        clearTimeout(transcriptStabilityTimer);
+      }
+      
+      window.removeEventListener('video_player_ready', (e: any) => {
+        handleVideoPlayerReady(e.detail?.isReady ?? false);
+      });
+      
+      window.removeEventListener('process_pending_video', (e: CustomEvent<any>) => {});
     };
-  }, []);
+  }, [toast, transcriptStabilityTimer]);
 
   useEffect(() => {
     if (!currentVideo) {
@@ -105,6 +214,19 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
         name: currentVideo.video_name,
         keyword: currentVideo.keyword
       });
+      return;
+    }
+    
+    // If the video player is not ready yet, queue this request and release the lock
+    if (!isVideoElementReady()) {
+      console.log("TranscriptListener: Video player not ready, queueing request and waiting");
+      queueVideoRequest({
+        id: currentVideo.id,
+        url: currentVideo.video_url,
+        name: currentVideo.video_name,
+        keyword: currentVideo.keyword
+      });
+      releaseVideoLoadingLock(requestId);
       return;
     }
     
@@ -147,8 +269,10 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
       clearTimeout(videoVisibilityTimerRef.current);
     }
     
+    // First hide the current video
     setIsVideoVisible(false);
     
+    // Then show the new one after a short delay
     videoVisibilityTimerRef.current = setTimeout(() => {
       if (currentVideoRequestRef.current === requestId) {
         console.log("TranscriptListener: Making video visible");
@@ -350,22 +474,58 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
     }
   };
 
-  const handleVideoRequest = (videoData: any) => {
-    console.log("TranscriptListener: Processing video request from loaded video data", videoData);
+  const handleVideoRequest = (video: {
+    id: number;
+    url: string;
+    name: string;
+    keyword: string;
+  }): void => {
+    // Generate a unique request ID
+    const requestId = `handle-video-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
     
-    setVideoRenderAttempts(prevAttempts => prevAttempts + 1);
-    setCurrentVideo({
-      id: videoData.id,
-      video_url: videoData.url,
-      video_name: videoData.name,
-      keyword: videoData.keyword
-    });
+    // Only proceed if we can acquire a lock
+    if (!acquireVideoLoadingLock(requestId)) {
+      console.log("TranscriptListener: Already processing a video request, queueing this one");
+      queueVideoRequest(video);
+      return;
+    }
     
-    toast({
-      title: "Video Found",
-      description: `Now playing: ${videoData.name}`,
-      duration: 3000,
-    });
+    try {
+      // Update the conversation state with the new video
+      console.log(`TranscriptListener: Setting current video: ${video.name} (ID: ${video.id})`);
+      setCurrentVideo({
+        id: video.id,
+        video_url: video.url,
+        video_name: video.name,
+        keyword: video.keyword
+      });
+      
+      // Add a system message about the video
+      addMessage({
+        text: `Now playing: ${video.name || video.keyword}`,
+        isSystem: true,
+        timestamp: Date.now()
+      });
+      
+      // Release the lock after a short delay to ensure the state update completes
+      setTimeout(() => {
+        releaseVideoLoadingLock(requestId);
+      }, 300);
+    } catch (error) {
+      console.error("TranscriptListener: Error in handleVideoRequest:", error);
+      releaseVideoLoadingLock(requestId);
+      
+      // Increment error counter and trigger a new render attempt if needed
+      videoErrorsRef.current.push(`Error processing video: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      setVideoRenderAttempts(prev => prev + 1);
+      
+      toast({
+        variant: "destructive",
+        title: "Video Processing Error",
+        description: "Failed to process video request. Please try again.",
+        duration: 3000,
+      });
+    }
   };
 
   const useLocalFallbackVideo = (keyword: string) => {

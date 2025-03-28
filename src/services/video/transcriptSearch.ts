@@ -1,7 +1,7 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { validateVideoUrl } from "./videoUrlValidator";
 import { useToast } from "@/hooks/use-toast";
+import { validateSearchKeyword } from "@/utils/videoLoadingManager";
 
 interface TranscriptSearchResult {
   videos: string[];
@@ -30,13 +30,25 @@ export const fetchVideos = async (): Promise<string[]> => {
     }
     
     console.log("Extracted Keywords:", keywords);
+    
+    // Validate keywords before search
+    const validatedKeywords = keywords
+      .map(keyword => validateSearchKeyword(keyword))
+      .filter(Boolean) as string[];
+      
+    if (validatedKeywords.length === 0) {
+      console.warn("No valid keywords after validation");
+      return [];
+    }
+    
+    console.log("Validated Keywords:", validatedKeywords);
 
     // Query Supabase
     const { data, error } = await supabase
       .from("videos")
       .select("video_url")
       .or(
-        keywords.map((keyword, index) => 
+        validatedKeywords.map((keyword, index) => 
           `video_tag${index + 1}.ilike.%${keyword}%`
         ).join(", ")
       );
@@ -47,7 +59,7 @@ export const fetchVideos = async (): Promise<string[]> => {
     }
 
     if (!data || data.length === 0) {
-      console.log("No videos found matching keywords:", keywords);
+      console.log("No videos found matching keywords:", validatedKeywords);
       return [];
     }
 
@@ -82,13 +94,24 @@ export const fetchVideosWithDetails = async (): Promise<TranscriptSearchResult> 
       .slice(0, 3); // Pick first 3 substantial words
     
     console.log("Transcript Search: Extracted Keywords:", keywords);
-
-    if (keywords.length === 0) {
-      return { videos: [], success: false, error: "No valid keywords extracted from transcript" };
+    
+    // Validate keywords before search
+    const validatedKeywords = keywords
+      .map(keyword => validateSearchKeyword(keyword))
+      .filter(Boolean) as string[];
+      
+    if (validatedKeywords.length === 0) {
+      return { 
+        videos: [], 
+        success: false, 
+        error: "No valid keywords extracted from transcript" 
+      };
     }
+    
+    console.log("Transcript Search: Validated Keywords:", validatedKeywords);
 
     // Build the OR query conditions
-    const conditions = keywords
+    const conditions = validatedKeywords
       .filter(k => k && k.trim().length > 0)
       .map((keyword, index) => {
         // Use modulo to cycle through the 3 tag columns if we have more than 3 keywords
@@ -111,8 +134,8 @@ export const fetchVideosWithDetails = async (): Promise<TranscriptSearchResult> 
     }
 
     if (!data || data.length === 0) {
-      console.log("Transcript Search: No matching videos found for keywords:", keywords);
-      return { videos: [], success: false, error: `No videos found matching keywords: ${keywords.join(", ")}` };
+      console.log("Transcript Search: No matching videos found for keywords:", validatedKeywords);
+      return { videos: [], success: false, error: `No videos found matching keywords: ${validatedKeywords.join(", ")}` };
     }
 
     // Extract and validate video URLs
