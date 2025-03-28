@@ -1,6 +1,7 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import { VideoSearchResult } from "./types";
+import { validateVideoUrl } from "./videoUrlValidator";
 
 export async function queryVideosWithCatalogTag(): Promise<VideoSearchResult> {
   console.log("Running catalog tag query...");
@@ -58,6 +59,16 @@ export async function queryVideosWithCatalogTag(): Promise<VideoSearchResult> {
       }
       
       console.log("Added sample catalog video:", newVideo);
+      console.log("Sample video URL:", newVideo.video_url);
+      
+      // Validate the video URL
+      const validatedUrl = validateVideoUrl(newVideo.video_url);
+      if (!validatedUrl) {
+        console.error("Sample video has invalid URL format:", newVideo.video_url);
+      } else {
+        console.log("Sample video URL is valid");
+      }
+      
       return {
         success: true,
         data: [newVideo],
@@ -114,6 +125,16 @@ export async function queryVideosWithCatalogTag(): Promise<VideoSearchResult> {
       }
       
       console.log("No catalog videos found, using first video as fallback:", firstVideo);
+      console.log("Fallback video URL:", firstVideo.video_url);
+      
+      // Validate the fallback video URL
+      const validatedUrl = validateVideoUrl(firstVideo.video_url);
+      if (!validatedUrl) {
+        console.error("Fallback video has invalid URL format:", firstVideo.video_url);
+      } else {
+        console.log("Fallback video URL is valid");
+      }
+      
       return {
         success: true,
         data: [firstVideo],
@@ -123,6 +144,17 @@ export async function queryVideosWithCatalogTag(): Promise<VideoSearchResult> {
           searchMethod: "first video fallback"
         }
       };
+    }
+    
+    // Validate all found catalog videos
+    for (const video of catalogData) {
+      console.log(`Validating video URL for "${video.video_name}":`, video.video_url);
+      const validatedUrl = validateVideoUrl(video.video_url);
+      if (!validatedUrl) {
+        console.error(`Video "${video.video_name}" has invalid URL format:`, video.video_url);
+      } else {
+        console.log(`Video "${video.video_name}" URL is valid`);
+      }
     }
     
     return {
@@ -158,6 +190,15 @@ export async function addTestVideo(
   tag3?: string
 ): Promise<boolean> {
   try {
+    console.log(`Adding test video: ${videoName} with URL: ${videoUrl}`);
+    
+    // Validate the URL before attempting to add
+    const validatedUrl = validateVideoUrl(videoUrl);
+    if (!validatedUrl) {
+      console.error(`Invalid video URL format for test video "${videoName}":`, videoUrl);
+      return false;
+    }
+    
     const { data, error } = await supabase
       .from('videos')
       .insert({

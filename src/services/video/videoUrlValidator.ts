@@ -154,6 +154,114 @@ export const testVideoPlayability = async (url: string): Promise<boolean> => {
   }
 };
 
+// Helper function to manually test video URL in console
+export const manualTestVideoUrl = (url: string) => {
+  console.log("[MANUAL TEST] Testing video URL:", url);
+  
+  // Step 1: Validate URL format
+  try {
+    const validUrl = validateVideoUrl(url);
+    console.log("[MANUAL TEST] URL validation result:", validUrl ? "VALID" : "INVALID");
+    
+    if (!validUrl) {
+      return {
+        isValid: false,
+        reason: "URL failed validation check"
+      };
+    }
+    
+    // Step 2: Create a test video element
+    const testVideo = document.createElement('video');
+    testVideo.style.position = 'fixed';
+    testVideo.style.top = '0';
+    testVideo.style.left = '0';
+    testVideo.style.width = '320px';
+    testVideo.style.height = '240px';
+    testVideo.style.zIndex = '9999';
+    testVideo.style.background = '#000';
+    testVideo.controls = true;
+    testVideo.muted = true;
+    
+    // Add message
+    const messageDiv = document.createElement('div');
+    messageDiv.style.position = 'fixed';
+    messageDiv.style.top = '240px';
+    messageDiv.style.left = '0';
+    messageDiv.style.width = '320px';
+    messageDiv.style.padding = '10px';
+    messageDiv.style.background = 'rgba(0,0,0,0.8)';
+    messageDiv.style.color = '#fff';
+    messageDiv.style.zIndex = '10000';
+    messageDiv.style.fontSize = '12px';
+    messageDiv.textContent = 'Testing video URL... Click to close.';
+    
+    // Show instructions
+    console.log("[MANUAL TEST] Adding test video to page. Click it to remove.");
+    
+    // Add click handler to remove test elements
+    const cleanup = () => {
+      if (document.body.contains(testVideo)) document.body.removeChild(testVideo);
+      if (document.body.contains(messageDiv)) document.body.removeChild(messageDiv);
+      console.log("[MANUAL TEST] Test video removed.");
+    };
+    
+    testVideo.addEventListener('click', cleanup);
+    messageDiv.addEventListener('click', cleanup);
+    
+    // Add event listeners
+    testVideo.addEventListener('loadeddata', () => {
+      console.log("[MANUAL TEST] Video loaded successfully!");
+      messageDiv.textContent = 'Video loaded successfully! Click to close.';
+      messageDiv.style.background = 'rgba(0,128,0,0.8)';
+    });
+    
+    testVideo.addEventListener('error', (e) => {
+      console.error("[MANUAL TEST] Video failed to load:", e);
+      if (testVideo.error) {
+        console.error("[MANUAL TEST] Error code:", testVideo.error.code, "Message:", testVideo.error.message);
+        messageDiv.textContent = `Error loading video: ${testVideo.error.message}. Click to close.`;
+      } else {
+        messageDiv.textContent = 'Unknown error loading video. Click to close.';
+      }
+      messageDiv.style.background = 'rgba(255,0,0,0.8)';
+    });
+    
+    // Add to document
+    document.body.appendChild(testVideo);
+    document.body.appendChild(messageDiv);
+    
+    // Set source and load
+    testVideo.src = url;
+    testVideo.load();
+    
+    // Attempt to play
+    testVideo.play().catch(e => {
+      console.warn("[MANUAL TEST] Auto-play was blocked:", e);
+    });
+    
+    // Auto-remove after 30 seconds
+    setTimeout(cleanup, 30000);
+    
+    return {
+      isValid: true,
+      testElement: testVideo,
+      cleanup
+    };
+    
+  } catch (e) {
+    console.error("[MANUAL TEST] Error during manual testing:", e);
+    return {
+      isValid: false,
+      reason: e instanceof Error ? e.message : "Unknown error"
+    };
+  }
+};
+
+// Export the helper functions to make them available in the console
+if (typeof window !== 'undefined') {
+  (window as any).testVideoUrl = manualTestVideoUrl;
+}
+
 // Additional helper to extract the filename from a Supabase URL for better logging
 export const extractFilenameFromUrl = (url: string): string => {
   try {
