@@ -38,6 +38,14 @@ if (typeof window !== 'undefined') {
     
     return "Transcript watcher started";
   };
+  
+  // Start the transcript watcher by default
+  setTimeout(() => {
+    if ((window as any).watchTranscript) {
+      (window as any).watchTranscript();
+      console.log("Automatic transcript watcher started");
+    }
+  }, 1000);
 }
 
 ReactDOM.createRoot(document.getElementById('root')!).render(

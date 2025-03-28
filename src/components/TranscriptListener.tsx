@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState, useRef } from 'react';
 import { useConversationHistory } from '@/hooks/useConversationHistory';
 import VideoPlayer from './VideoPlayer';
@@ -33,25 +34,50 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
   const [searchError, setSearchError] = useState<string | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const transcriptWatcherRef = useRef<number | null>(null);
+  const lastSearchTimestampRef = useRef<number>(0);
 
+  // Enhanced transcript watcher using MutationObserver for localStorage changes
   useEffect(() => {
     const watchTranscript = () => {
-      let lastTranscript = localStorage.getItem('transcript') || '';
+      console.log("TranscriptListener: Setting up enhanced transcript watcher");
       
-      const checkTranscript = () => {
-        const currentTranscript = localStorage.getItem('transcript') || '';
-        if (currentTranscript !== lastTranscript && currentTranscript.trim()) {
-          console.log("TranscriptListener: Detected new transcript in localStorage:", currentTranscript);
-          lastTranscript = currentTranscript;
-          handleVoiceInput(currentTranscript);
+      // Override localStorage.setItem to get real-time updates
+      const originalSetItem = localStorage.setItem;
+      localStorage.setItem = function(key, value) {
+        originalSetItem.apply(this, [key, value]);
+        
+        // Only process 'transcript' key changes
+        if (key === 'transcript') {
+          console.log(`TranscriptListener: Detected real-time change to transcript: "${value}"`);
+          
+          // Process the new transcript value immediately
+          if (value && value.trim() && value !== lastProcessedInputRef.current) {
+            handleVoiceInput(value);
+          }
         }
       };
       
-      transcriptWatcherRef.current = window.setInterval(checkTranscript, 1000);
+      // Also check periodically as a fallback
+      transcriptWatcherRef.current = window.setInterval(() => {
+        const currentTranscript = localStorage.getItem('transcript') || '';
+        if (currentTranscript !== lastProcessedInputRef.current && currentTranscript.trim()) {
+          console.log("TranscriptListener: Detected new transcript via interval check:", currentTranscript);
+          handleVoiceInput(currentTranscript);
+        }
+      }, 1000);
+      
+      // Initial check
+      const initialTranscript = localStorage.getItem('transcript');
+      if (initialTranscript && initialTranscript.trim()) {
+        console.log("TranscriptListener: Found initial transcript value:", initialTranscript);
+        handleVoiceInput(initialTranscript);
+      }
     };
     
+    // Start the enhanced transcript watcher
     watchTranscript();
     
+    // Cleanup function
     return () => {
       if (transcriptWatcherRef.current) {
         clearInterval(transcriptWatcherRef.current);
@@ -141,6 +167,14 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
       return;
     }
     
+    // Prevent excessive calls in quick succession (debounce-like behavior)
+    const now = Date.now();
+    if (now - lastSearchTimestampRef.current < 500) {
+      console.log("TranscriptListener: Skipping too frequent search request");
+      return;
+    }
+    lastSearchTimestampRef.current = now;
+    
     if (lastProcessedInputRef.current === inputText) {
       console.log("TranscriptListener: Skipping duplicate voice input:", inputText);
       return;
@@ -166,6 +200,7 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
     });
     
     try {
+      // Ensure transcript is saved to localStorage (redundant but ensures consistency)
       localStorage.setItem('transcript', inputText);
       
       const savedInputs = JSON.parse(localStorage.getItem('voice_input_history') || '[]');

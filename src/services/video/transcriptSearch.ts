@@ -54,6 +54,8 @@ export const fetchVideosWithDetails = async (): Promise<TranscriptSearchResult> 
       return { videos: [], success: false, error: "No transcript text found in local storage" };
     }
 
+    console.log("Transcript Search: Using transcript:", storedText);
+
     // Extract keywords (splitting by space for simplicity)
     const keywords = storedText.split(" ").slice(0, 3); // Pick first 3 words
     console.log("Transcript Search: Extracted Keywords:", keywords);

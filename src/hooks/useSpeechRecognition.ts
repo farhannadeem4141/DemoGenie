@@ -60,6 +60,9 @@ const useSpeechRecognition = (options: SpeechRecognitionOptions = {}): UseSpeech
     try {
       console.log('[useSpeechRecognition] Saving transcript to localStorage:', text);
       
+      // First, save to transcript key for immediate video search
+      localStorage.setItem('transcript', text);
+      
       // Save to native_voice_input_history
       const nativeInputsStr = localStorage.getItem(NATIVE_VOICE_INPUT_KEY);
       let savedInputs = [];
@@ -178,24 +181,39 @@ const useSpeechRecognition = (options: SpeechRecognitionOptions = {}): UseSpeech
       
       recognitionRef.current.onresult = (event: SpeechRecognitionEvent) => {
         let currentTranscript = '';
+        let finalTranscript = '';
+        
         for (let i = event.resultIndex; i < event.results.length; i++) {
           const result = event.results[i];
           if (result.isFinal) {
+            finalTranscript += result[0].transcript;
+          } else {
+            // This is an interim result
             currentTranscript += result[0].transcript;
           }
         }
         
-        if (currentTranscript.trim()) {
-          console.log('[useSpeechRecognition] Speech recognized:', currentTranscript);
-          setTranscript(prev => {
-            const newTranscript = prev ? `${prev} ${currentTranscript}` : currentTranscript;
-            
-            // Save transcript immediately when we get results
+        // Update transcript with both final and interim results
+        setTranscript(prev => {
+          // For final transcripts, append to previous with space
+          let newTranscript = prev;
+          
+          if (finalTranscript) {
+            newTranscript = prev ? `${prev} ${finalTranscript}` : finalTranscript;
+          }
+          
+          // For interim results, use the current transcript as-is
+          if (currentTranscript) {
+            newTranscript = prev ? `${prev} ${currentTranscript}` : currentTranscript;
+          }
+          
+          // Save transcript to localStorage in real-time, even for interim results
+          if (newTranscript.trim()) {
             saveTranscriptToLocalStorage(newTranscript);
-            
-            return newTranscript;
-          });
-        }
+          }
+          
+          return newTranscript;
+        });
       };
       
       recognitionRef.current.onerror = (event: SpeechRecognitionErrorEvent) => {
