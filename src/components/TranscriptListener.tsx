@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useRef } from 'react';
 import { useConversationHistory } from '@/hooks/useConversationHistory';
 import VideoPlayer from './VideoPlayer';
@@ -36,28 +35,23 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
   const transcriptWatcherRef = useRef<number | null>(null);
   const lastSearchTimestampRef = useRef<number>(0);
 
-  // Enhanced transcript watcher using MutationObserver for localStorage changes
   useEffect(() => {
     const watchTranscript = () => {
       console.log("TranscriptListener: Setting up enhanced transcript watcher");
       
-      // Override localStorage.setItem to get real-time updates
       const originalSetItem = localStorage.setItem;
       localStorage.setItem = function(key, value) {
         originalSetItem.apply(this, [key, value]);
         
-        // Only process 'transcript' key changes
         if (key === 'transcript') {
           console.log(`TranscriptListener: Detected real-time change to transcript: "${value}"`);
           
-          // Process the new transcript value immediately
           if (value && value.trim() && value !== lastProcessedInputRef.current) {
             handleVoiceInput(value);
           }
         }
       };
       
-      // Also check periodically as a fallback
       transcriptWatcherRef.current = window.setInterval(() => {
         const currentTranscript = localStorage.getItem('transcript') || '';
         if (currentTranscript !== lastProcessedInputRef.current && currentTranscript.trim()) {
@@ -66,7 +60,6 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
         }
       }, 1000);
       
-      // Initial check
       const initialTranscript = localStorage.getItem('transcript');
       if (initialTranscript && initialTranscript.trim()) {
         console.log("TranscriptListener: Found initial transcript value:", initialTranscript);
@@ -74,10 +67,8 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
       }
     };
     
-    // Start the enhanced transcript watcher
     watchTranscript();
     
-    // Cleanup function
     return () => {
       if (transcriptWatcherRef.current) {
         clearInterval(transcriptWatcherRef.current);
@@ -150,8 +141,6 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
   useEffect(() => {
     if (process.env.NODE_ENV === 'development') {
       console.log("Initializing video fixer utility in dev mode");
-      VideoFixer.addTestButton();
-      
       setTimeout(() => {
         VideoFixer.checkAllVideos().then(result => {
           console.log("Initial video health check complete:", result);
@@ -167,7 +156,6 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
       return;
     }
     
-    // Prevent excessive calls in quick succession (debounce-like behavior)
     const now = Date.now();
     if (now - lastSearchTimestampRef.current < 500) {
       console.log("TranscriptListener: Skipping too frequent search request");
@@ -200,7 +188,6 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
     });
     
     try {
-      // Ensure transcript is saved to localStorage (redundant but ensures consistency)
       localStorage.setItem('transcript', inputText);
       
       const savedInputs = JSON.parse(localStorage.getItem('voice_input_history') || '[]');
@@ -262,16 +249,19 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
         if (result.success && result.videos.length > 0) {
           console.log("TranscriptListener: Found videos with transcript search:", result.videos);
           
+          const videoUrl = result.videos[0];
+          const videoName = videoUrl.split('/').pop()?.replace(/%20/g, ' ') || "Video";
+          
           setCurrentVideo({
             id: Date.now(),
-            video_url: result.videos[0],
-            video_name: "Video from transcript search",
+            video_url: videoUrl,
+            video_name: videoName,
             keyword: inputText
           });
           
           toast({
             title: "Video Found",
-            description: "Found video using transcript search",
+            description: `Now playing: ${videoName}`,
             duration: 3000,
           });
           

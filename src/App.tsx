@@ -11,6 +11,7 @@ function App() {
     <Router>
       <Routes>
         <Route path="/" element={<Index />} />
+        {/* Database route is kept for functionality but hidden from UI */}
         <Route path="/database" element={<Database />} />
         <Route path="*" element={<NotFound />} />
       </Routes>

@@ -12,7 +12,7 @@ const Header = () => {
         <nav>
           <ul className="flex space-x-6">
             <li><Link to="/" className="hover:text-green-600 transition-colors">Home</Link></li>
-            <li><Link to="/database" className="hover:text-green-600 transition-colors">Database</Link></li>
+            {/* Database link removed as requested */}
           </ul>
         </nav>
       </div>

@@ -157,47 +157,9 @@ export const VideoFixer = {
       video.src = url;
       video.load();
     });
-  },
-  
-  /**
-   * Create a test button in the UI to run diagnostics
-   */
-  addTestButton() {
-    const btn = document.createElement('button');
-    btn.textContent = '🔄 Fix Videos';
-    btn.style.position = 'fixed';
-    btn.style.bottom = '10px';
-    btn.style.left = '10px';
-    btn.style.zIndex = '9999';
-    btn.style.padding = '10px';
-    btn.style.background = '#25D366';
-    btn.style.color = 'white';
-    btn.style.border = 'none';
-    btn.style.borderRadius = '5px';
-    btn.style.cursor = 'pointer';
-    
-    btn.onclick = async () => {
-      console.log("🔄 Video fixer running...");
-      btn.disabled = true;
-      btn.textContent = '⏳ Fixing...';
-      
-      const result = await this.checkAllVideos();
-      
-      btn.textContent = result.success ? 
-        `✅ Fixed ${result.fixed?.length || 0} videos` :
-        '❌ Fix failed';
-      
-      setTimeout(() => {
-        btn.textContent = '🔄 Fix Videos';
-        btn.disabled = false;
-      }, 3000);
-    };
-    
-    document.body.appendChild(btn);
-    console.log("🛠️ Video fixer button added to the UI");
-    
-    return btn;
   }
+  
+  // The addTestButton method has been removed
 };
 
 // Export a convenient function to run in the console
