@@ -46,6 +46,26 @@ export const testUrl = async (url: string): Promise<{valid: boolean; playable?: 
   }
 };
 
+// Helper to generate public URL for video path
+export const getPublicVideoUrl = (videoPath: string): string | null => {
+  try {
+    if (!videoPath) return null;
+    
+    // If it's already a fully formed URL, validate and return it
+    if (videoPath.startsWith('http')) {
+      return validateVideoUrl(videoPath);
+    }
+    
+    // If it's a storage path, convert to public URL
+    const { data } = supabase.storage.from("videos").getPublicUrl(videoPath);
+    console.log("Generated public URL:", data.publicUrl);
+    return validateVideoUrl(data.publicUrl);
+  } catch (error) {
+    console.error("Error generating public video URL:", error);
+    return null;
+  }
+};
+
 // Function to display a video in a small player on the page for visual testing
 export const showTestPlayer = (url: string): (() => void) => {
   console.log("🎬 Creating test player for:", url);
@@ -113,10 +133,81 @@ export const showTestPlayer = (url: string): (() => void) => {
   urlInfo.style.marginTop = '8px';
   urlInfo.textContent = url;
   
+  // Add action buttons
+  const actions = document.createElement('div');
+  actions.style.display = 'flex';
+  actions.style.gap = '8px';
+  actions.style.marginTop = '8px';
+  
+  const regenerateBtn = document.createElement('button');
+  regenerateBtn.textContent = '🔄 Try Public URL';
+  regenerateBtn.style.background = '#3b82f6';
+  regenerateBtn.style.border = 'none';
+  regenerateBtn.style.color = '#fff';
+  regenerateBtn.style.padding = '4px 8px';
+  regenerateBtn.style.borderRadius = '4px';
+  regenerateBtn.style.cursor = 'pointer';
+  regenerateBtn.style.fontSize = '12px';
+  
+  regenerateBtn.addEventListener('click', async () => {
+    status.textContent = 'Generating public URL...';
+    status.style.background = 'rgba(0,0,0,0.5)';
+    
+    try {
+      const publicUrl = getPublicVideoUrl(url.includes('/object/') ? url.split('/object/')[1].split('?')[0] : url);
+      if (publicUrl) {
+        video.src = publicUrl;
+        video.load();
+        video.play().catch(e => {
+          console.warn("Auto-play prevented:", e);
+        });
+        status.textContent = 'Trying with public URL...';
+        urlInfo.textContent = publicUrl;
+      } else {
+        status.textContent = 'Failed to generate public URL';
+        status.style.background = 'rgba(255,0,0,0.5)';
+      }
+    } catch (e) {
+      status.textContent = 'Error generating URL: ' + (e instanceof Error ? e.message : 'Unknown error');
+      status.style.background = 'rgba(255,0,0,0.5)';
+    }
+  });
+  
+  const copyUrlBtn = document.createElement('button');
+  copyUrlBtn.textContent = '📋 Copy URL';
+  copyUrlBtn.style.background = '#10b981';
+  copyUrlBtn.style.border = 'none';
+  copyUrlBtn.style.color = '#fff';
+  copyUrlBtn.style.padding = '4px 8px';
+  copyUrlBtn.style.borderRadius = '4px';
+  copyUrlBtn.style.cursor = 'pointer';
+  copyUrlBtn.style.fontSize = '12px';
+  
+  copyUrlBtn.addEventListener('click', () => {
+    navigator.clipboard.writeText(video.src)
+      .then(() => {
+        const originalText = copyUrlBtn.textContent;
+        copyUrlBtn.textContent = '✅ Copied!';
+        setTimeout(() => {
+          copyUrlBtn.textContent = originalText;
+        }, 2000);
+      })
+      .catch(() => {
+        copyUrlBtn.textContent = '❌ Failed!';
+        setTimeout(() => {
+          copyUrlBtn.textContent = '📋 Copy URL';
+        }, 2000);
+      });
+  });
+  
+  actions.appendChild(regenerateBtn);
+  actions.appendChild(copyUrlBtn);
+  
   // Assemble container
   container.appendChild(header);
   container.appendChild(video);
   container.appendChild(status);
+  container.appendChild(actions);
   container.appendChild(urlInfo);
   
   // Add to page
@@ -172,6 +263,77 @@ export const showTestPlayer = (url: string): (() => void) => {
   return cleanup;
 };
 
+// Function to fix URLs in the database
+export const fixVideosInDatabase = async (): Promise<void> => {
+  console.log("🔍 Looking for videos with problematic URLs...");
+  
+  try {
+    const { data, error } = await supabase.from('videos').select('*');
+    
+    if (error) {
+      console.error("❌ Database query failed:", error);
+      return;
+    }
+    
+    if (!data || data.length === 0) {
+      console.log("❓ No videos found in database");
+      return;
+    }
+    
+    console.log(`✅ Found ${data.length} videos to check:`);
+    
+    // Process each video
+    for (const video of data) {
+      console.group(`Checking video: ${video.video_name} (ID: ${video.id})`);
+      
+      if (!video.video_url) {
+        console.error("❌ Video has no URL");
+        console.groupEnd();
+        continue;
+      }
+      
+      const validUrl = validateVideoUrl(video.video_url);
+      if (!validUrl) {
+        console.log(`⚠️ Invalid URL detected for "${video.video_name}": ${video.video_url}`);
+        
+        try {
+          // If it's a storage path, convert to public URL
+          const publicUrl = getPublicVideoUrl(video.video_url);
+          
+          if (publicUrl) {
+            console.log(`✅ Generated public URL: ${publicUrl}`);
+            
+            // Update the database
+            const { error: updateError } = await supabase
+              .from('videos')
+              .update({ video_url: publicUrl })
+              .eq('id', video.id);
+              
+            if (updateError) {
+              console.error("❌ Error updating video URL:", updateError);
+            } else {
+              console.log("✅ Successfully updated video URL in database");
+            }
+          } else {
+            console.error("❌ Failed to generate public URL");
+          }
+        } catch (e) {
+          console.error("❌ Error processing URL:", e);
+        }
+      } else {
+        console.log(`✅ URL is valid: ${video.video_url}`);
+      }
+      
+      console.groupEnd();
+    }
+    
+    console.log("✅ Finished checking all videos");
+    
+  } catch (error) {
+    console.error("❌ Error fixing database URLs:", error);
+  }
+};
+
 // Function to find and test videos in database
 export const findAndTestVideosInDatabase = async (tag?: string): Promise<void> => {
   console.log(`🔍 Searching for videos in database${tag ? ` with tag: ${tag}` : ''}`);
@@ -219,14 +381,74 @@ export const findAndTestVideosInDatabase = async (tag?: string): Promise<void> =
       }
       
       const validUrl = validateVideoUrl(video.video_url);
-      console.log(`URL validation: ${validUrl ? '✅ Valid' : '❌ Invalid'}`);
-      console.log(`Full URL: ${video.video_url}`);
+      if (!validUrl) {
+        console.warn(`⚠️ URL validation failed: ${video.video_url}`);
+        console.log("Running auto-fix...");
+        
+        const publicUrl = getPublicVideoUrl(video.video_url);
+        if (publicUrl) {
+          console.log(`✅ Generated public URL: ${publicUrl}`);
+          video.video_url = publicUrl;
+          
+          // Update in the database
+          const { error: updateError } = await supabase
+            .from('videos')
+            .update({ video_url: publicUrl })
+            .eq('id', video.id);
+            
+          if (!updateError) {
+            console.log("✅ Database updated with new URL");
+          } else {
+            console.error("❌ Failed to update database:", updateError);
+          }
+        }
+      } else {
+        console.log(`✅ URL validation passed: ${video.video_url}`);
+      }
       
+      console.log(`Full URL: ${video.video_url}`);
       console.groupEnd();
     }
     
   } catch (error) {
     console.error("❌ Error searching database:", error);
+  }
+};
+
+// Diagnostic function that runs all checks and attempts to fix issues
+export const diagnoseAndFixVideoIssues = async (): Promise<void> => {
+  console.log("🔍 Running complete video system diagnostic...");
+  
+  try {
+    // Step 1: Check database connection
+    console.log("Step 1: Verifying database connection...");
+    const { data: healthCheck, error: healthError } = await supabase.from('videos').select('count(*)');
+    
+    if (healthError) {
+      console.error("❌ Database connection failed:", healthError);
+      return;
+    }
+    
+    console.log("✅ Database connection successful");
+    
+    // Step 2: Find and fix problematic URLs
+    console.log("Step 2: Checking and fixing video URLs...");
+    await fixVideosInDatabase();
+    
+    // Step 3: Create a sample log entry to test URL creation
+    console.log("Step 3: Testing storage URL generation...");
+    try {
+      // This is just a test, not actually uploading
+      const { data: testPublicUrl } = supabase.storage.from('videos').getPublicUrl('test-video.mp4');
+      console.log("✅ Storage public URL test successful:", testPublicUrl);
+    } catch (e) {
+      console.error("❌ Storage URL generation test failed:", e);
+    }
+    
+    console.log("✅ Diagnostic complete! Check logs for any issues that need attention.");
+    
+  } catch (error) {
+    console.error("❌ Error during diagnostic:", error);
   }
 };
 
@@ -236,7 +458,10 @@ if (typeof window !== 'undefined') {
     testUrl,
     showTestPlayer,
     findAndTestVideosInDatabase,
-    validateUrl: validateVideoUrl
+    fixVideosInDatabase,
+    diagnoseAndFixVideoIssues,
+    validateUrl: validateVideoUrl,
+    getPublicUrl: getPublicVideoUrl
   };
   
   (window as any).videoUrlTester = videoUrlTester;
@@ -256,6 +481,12 @@ if (typeof window !== 'undefined') {
       
     videoUrlTester.findAndTestVideosInDatabase("catalog") 
       - Tests videos with specific tag
+      
+    videoUrlTester.fixVideosInDatabase() 
+      - Automatically fixes problematic URLs in the database
+      
+    videoUrlTester.diagnoseAndFixVideoIssues()
+      - Runs full diagnostic and attempts to fix all issues
   `);
 }
 
@@ -263,5 +494,8 @@ export default {
   testUrl,
   showTestPlayer,
   findAndTestVideosInDatabase,
-  validateUrl: validateVideoUrl
+  fixVideosInDatabase,
+  diagnoseAndFixVideoIssues,
+  validateUrl: validateVideoUrl,
+  getPublicUrl: getPublicVideoUrl
 };

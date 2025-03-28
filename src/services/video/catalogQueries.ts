@@ -3,6 +3,26 @@ import { supabase } from "@/integrations/supabase/client";
 import { VideoSearchResult } from "./types";
 import { validateVideoUrl } from "./videoUrlValidator";
 
+// Helper to generate public URL for video path
+const getPublicVideoUrl = (videoPath: string): string | null => {
+  try {
+    if (!videoPath) return null;
+    
+    // If it's already a fully formed URL, validate and return it
+    if (videoPath.startsWith('http')) {
+      return validateVideoUrl(videoPath);
+    }
+    
+    // If it's a storage path, convert to public URL
+    const { data } = supabase.storage.from("videos").getPublicUrl(videoPath);
+    console.log("Generated public URL:", data.publicUrl);
+    return validateVideoUrl(data.publicUrl);
+  } catch (error) {
+    console.error("Error generating public video URL:", error);
+    return null;
+  }
+};
+
 export async function queryVideosWithCatalogTag(): Promise<VideoSearchResult> {
   console.log("Running catalog tag query...");
   
@@ -12,7 +32,7 @@ export async function queryVideosWithCatalogTag(): Promise<VideoSearchResult> {
       .from('videos')
       .select('*', { count: 'exact', head: true });
     
-    console.log("Total records in Videos table:", count);
+    console.log("Total records in videos table:", count);
     
     if (countError) {
       console.error("Error counting videos:", countError);
@@ -28,7 +48,7 @@ export async function queryVideosWithCatalogTag(): Promise<VideoSearchResult> {
       };
     }
     
-    if (count === 0) {
+    if (count === 0 || count === null) {
       console.log("Videos table exists but is empty - adding a sample video");
       
       // Add a sample catalog video since the table is empty
@@ -61,10 +81,24 @@ export async function queryVideosWithCatalogTag(): Promise<VideoSearchResult> {
       console.log("Added sample catalog video:", newVideo);
       console.log("Sample video URL:", newVideo.video_url);
       
-      // Validate the video URL
+      // Validate and possibly convert the video URL
       const validatedUrl = validateVideoUrl(newVideo.video_url);
       if (!validatedUrl) {
         console.error("Sample video has invalid URL format:", newVideo.video_url);
+        
+        // Attempt to generate a public URL
+        const publicUrl = getPublicVideoUrl(newVideo.video_url);
+        if (publicUrl) {
+          console.log("Generated public URL for sample video:", publicUrl);
+          // Update the database with the public URL
+          await supabase
+            .from('videos')
+            .update({ video_url: publicUrl })
+            .eq('id', newVideo.id);
+          
+          // Update the returned object
+          newVideo.video_url = publicUrl;
+        }
       } else {
         console.log("Sample video URL is valid");
       }
@@ -127,10 +161,24 @@ export async function queryVideosWithCatalogTag(): Promise<VideoSearchResult> {
       console.log("No catalog videos found, using first video as fallback:", firstVideo);
       console.log("Fallback video URL:", firstVideo.video_url);
       
-      // Validate the fallback video URL
+      // Validate and possibly convert the fallback video URL
       const validatedUrl = validateVideoUrl(firstVideo.video_url);
       if (!validatedUrl) {
         console.error("Fallback video has invalid URL format:", firstVideo.video_url);
+        
+        // Attempt to generate a public URL
+        const publicUrl = getPublicVideoUrl(firstVideo.video_url);
+        if (publicUrl) {
+          console.log("Generated public URL for fallback video:", publicUrl);
+          // Update the database with the public URL
+          await supabase
+            .from('videos')
+            .update({ video_url: publicUrl })
+            .eq('id', firstVideo.id);
+          
+          // Update the returned object
+          firstVideo.video_url = publicUrl;
+        }
       } else {
         console.log("Fallback video URL is valid");
       }
@@ -146,20 +194,37 @@ export async function queryVideosWithCatalogTag(): Promise<VideoSearchResult> {
       };
     }
     
-    // Validate all found catalog videos
-    for (const video of catalogData) {
+    // Process and validate all found catalog videos
+    const validatedVideos = await Promise.all(catalogData.map(async (video) => {
       console.log(`Validating video URL for "${video.video_name}":`, video.video_url);
       const validatedUrl = validateVideoUrl(video.video_url);
+      
       if (!validatedUrl) {
         console.error(`Video "${video.video_name}" has invalid URL format:`, video.video_url);
+        
+        // Attempt to generate a public URL
+        const publicUrl = getPublicVideoUrl(video.video_url);
+        if (publicUrl) {
+          console.log(`Generated public URL for video "${video.video_name}":`, publicUrl);
+          // Update the database with the public URL
+          await supabase
+            .from('videos')
+            .update({ video_url: publicUrl })
+            .eq('id', video.id);
+          
+          // Update the returned object with the public URL
+          return { ...video, video_url: publicUrl };
+        }
       } else {
         console.log(`Video "${video.video_name}" URL is valid`);
       }
-    }
+      
+      return video;
+    }));
     
     return {
       success: true,
-      data: catalogData,
+      data: validatedVideos,
       searchDetails: {
         keywordUsed: "catalog",
         matchType: 'partial',
@@ -193,17 +258,26 @@ export async function addTestVideo(
     console.log(`Adding test video: ${videoName} with URL: ${videoUrl}`);
     
     // Validate the URL before attempting to add
+    let finalUrl = videoUrl;
     const validatedUrl = validateVideoUrl(videoUrl);
     if (!validatedUrl) {
       console.error(`Invalid video URL format for test video "${videoName}":`, videoUrl);
-      return false;
+      
+      // Attempt to generate a public URL
+      const publicUrl = getPublicVideoUrl(videoUrl);
+      if (publicUrl) {
+        console.log(`Generated public URL for test video "${videoName}":`, publicUrl);
+        finalUrl = publicUrl;
+      } else {
+        return false;
+      }
     }
     
     const { data, error } = await supabase
       .from('videos')
       .insert({
         video_name: videoName,
-        video_url: videoUrl,
+        video_url: finalUrl,
         video_tag1: tag1,
         video_tag2: tag2,
         video_tag3: tag3
