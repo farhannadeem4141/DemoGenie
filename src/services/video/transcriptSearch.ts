@@ -1,6 +1,6 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { validateVideoUrl } from "./videoUrlValidator";
-import { useToast } from "@/hooks/use-toast";
 import { validateSearchKeyword } from "@/utils/videoLoadingManager";
 
 interface TranscriptSearchResult {
@@ -18,6 +18,8 @@ export const fetchVideos = async (): Promise<string[]> => {
       console.warn("No transcript found in local storage");
       return [];
     }
+
+    console.log("Transcript Search - Raw transcript:", storedText);
 
     // Extract keywords (splitting by space for simplicity)
     const keywords = storedText.split(" ")
@@ -95,8 +97,20 @@ export const fetchVideosWithDetails = async (): Promise<TranscriptSearchResult> 
     
     console.log("Transcript Search: Extracted Keywords:", keywords);
     
+    // Check for special keywords that should take priority
+    const priorityKeywords = ["quick", "replies", "business", "whatsapp", "template"];
+    const foundPriorityKeywords = keywords.filter(k => 
+      priorityKeywords.some(pk => k.toLowerCase().includes(pk.toLowerCase()))
+    );
+    
+    // Use priority keywords if found, otherwise use original keywords
+    const keywordsToUse = foundPriorityKeywords.length > 0 ? 
+      foundPriorityKeywords : keywords;
+      
+    console.log("Transcript Search: Using keywords:", keywordsToUse);
+    
     // Validate keywords before search
-    const validatedKeywords = keywords
+    const validatedKeywords = keywordsToUse
       .map(keyword => validateSearchKeyword(keyword))
       .filter(Boolean) as string[];
       

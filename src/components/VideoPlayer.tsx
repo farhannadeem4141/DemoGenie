@@ -35,9 +35,28 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const [isRefReady, setIsRefReady] = useState(false);
   const [processedUrl, setProcessedUrl] = useState<string>("");
   const playAttemptRef = useRef(false);
+  const safeToLoadRef = useRef(false);
+  const processingUrlRef = useRef(false);
+  
+  // Log mount/unmount state for debugging
+  useEffect(() => {
+    console.log("VideoPlayer: Component MOUNTED with URL:", videoUrl);
+    console.log("VideoPlayer: videoRef exists?", !!videoRef.current);
+    
+    mountedRef.current = true;
+    safeToLoadRef.current = false;
+    
+    return () => {
+      console.log("VideoPlayer: Component UNMOUNTED");
+      mountedRef.current = false;
+      safeToLoadRef.current = false;
+    };
+  }, []);
   
   // Check if video ref is available immediately after mount
   useEffect(() => {
+    console.log("VideoPlayer: Initial mount effect with URL:", videoUrl);
+    
     mountedRef.current = true;
     console.log("VideoPlayer mounted with URL:", videoUrl);
     
@@ -46,13 +65,18 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     setIsLoading(true);
     loadAttemptRef.current = 0;
     playAttemptRef.current = false;
+    processingUrlRef.current = true;
     
     // Process the URL first - This is important for Supabase URLs
     const cleanedUrl = videoUrl.trim().replace(/\n/g, '');
+    console.log("VideoPlayer: Processing URL:", cleanedUrl);
+    
     const validatedUrl = validateVideoUrl(cleanedUrl);
+    console.log("VideoPlayer: Validated URL:", validatedUrl || "(validation failed)");
+    
     setProcessedUrl(validatedUrl || cleanedUrl);
-    console.log("VideoPlayer: Processed URL:", validatedUrl || "(validation failed)");
-
+    processingUrlRef.current = false;
+    
     if (!validatedUrl) {
       setErrorDetails(`URL validation failed: ${cleanedUrl}`);
     }
@@ -62,22 +86,34 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       if (videoRef.current) {
         console.log("VideoPlayer: Video element reference is ready");
         setIsRefReady(true);
+        safeToLoadRef.current = true;
       } else {
         console.error("VideoPlayer: Video element reference is still null after init");
+        safeToLoadRef.current = false;
       }
     }, 100);
     
     return () => {
       console.log("VideoPlayer unmounting, last URL was:", videoUrl);
       mountedRef.current = false;
+      safeToLoadRef.current = false;
       clearTimeout(initTimer);
     };
   }, [videoUrl]);
 
   // Main effect to load and play video once we know ref is ready
   useEffect(() => {
-    if (!mountedRef.current || !processedUrl || !isRefReady || !videoRef.current) {
-      console.log("VideoPlayer: Skipping load - component not mounted, no URL, or video element not ready");
+    console.log("VideoPlayer: Load effect triggered. Conditions:", {
+      mounted: mountedRef.current,
+      url: !!processedUrl,
+      refReady: isRefReady,
+      videoRefExists: !!videoRef.current,
+      safeToLoad: safeToLoadRef.current,
+      processingUrl: processingUrlRef.current
+    });
+    
+    if (!mountedRef.current || !processedUrl || !isRefReady || !videoRef.current || !safeToLoadRef.current || processingUrlRef.current) {
+      console.log("VideoPlayer: Skipping load - component not mounted, no URL, video element not ready, or URL is still being processed");
       return;
     }
     
@@ -101,6 +137,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         
       videoElement.src = urlWithCache;
       videoElement.load();
+      console.log("VideoPlayer: Video src set and load() called");
     } catch (e) {
       console.error("VideoPlayer: Error setting source or loading:", e);
       setErrorLoading(true);
