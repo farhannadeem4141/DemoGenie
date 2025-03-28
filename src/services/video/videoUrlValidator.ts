@@ -1,4 +1,3 @@
-
 /**
  * Utility for validating and sanitizing video URLs with enhanced logging
  */
@@ -12,37 +11,49 @@ export const validateVideoUrl = (url: string): string => {
     return '';
   }
   
+  // Clean up the URL first - remove any whitespace, line breaks
+  let cleanedUrl = url.trim().replace(/\n/g, '');
+  
+  // Fix common Supabase URL issues
+  if (cleanedUrl.includes('//storage/v1/object/public/')) {
+    console.log('[URL VALIDATOR] Fixing double slash in Supabase URL path');
+    cleanedUrl = cleanedUrl.replace('//storage/v1/object/public/', '/storage/v1/object/public/');
+  }
+  
+  if (cleanedUrl.includes('//videos//')) {
+    console.log('[URL VALIDATOR] Fixing double slash in videos path');
+    cleanedUrl = cleanedUrl.replace('//videos//', '/videos/');
+  }
+  
   // First check if it's a valid URL format
   try {
-    console.log(`[URL VALIDATOR] Attempting to parse URL: ${url.substring(0, 50)}...`);
-    new URL(url);
+    console.log(`[URL VALIDATOR] Attempting to parse URL: ${cleanedUrl.substring(0, 50)}...`);
+    new URL(cleanedUrl);
     console.log(`[URL VALIDATOR] URL format is valid`);
   } catch (e) {
-    console.error(`[URL VALIDATOR] Invalid URL format: ${url}`);
+    console.error(`[URL VALIDATOR] Invalid URL format: ${cleanedUrl}`);
     console.error(`[URL VALIDATOR] Error details:`, e);
     return '';
   }
   
   // Remove any query params that might be causing issues
   try {
-    // If the URL contains extra spaces or line breaks, clean them
-    url = url.trim().replace(/\n/g, '');
-    console.log(`[URL VALIDATOR] Cleaned URL: ${url.substring(0, 50)}...`);
+    console.log(`[URL VALIDATOR] Cleaned URL: ${cleanedUrl.substring(0, 50)}...`);
     
     // For Supabase storage URLs, ensure they're properly formatted
-    if (url.includes('supabase.co/storage')) {
+    if (cleanedUrl.includes('supabase.co/storage')) {
       console.log(`[URL VALIDATOR] Detected Supabase storage URL`);
       
       // Check if the URL has a valid token
-      if (!url.includes('token=') && !url.includes('/public/')) {
+      if (!cleanedUrl.includes('token=') && !cleanedUrl.includes('/public/')) {
         console.error(`[URL VALIDATOR] Supabase URL missing token parameter or not public`);
       } else {
-        if (url.includes('token=')) {
+        if (cleanedUrl.includes('token=')) {
           console.log(`[URL VALIDATOR] Supabase URL contains token parameter`);
           
           // Extract and validate token expiration if possible
           try {
-            const tokenParam = url.split('token=')[1];
+            const tokenParam = cleanedUrl.split('token=')[1];
             const token = tokenParam.split('&')[0]; // Get the token value
             
             // Try to decode the JWT to check expiration
@@ -62,21 +73,26 @@ export const validateVideoUrl = (url: string): string => {
           } catch (e) {
             console.warn(`[URL VALIDATOR] Could not validate token expiration:`, e);
           }
-        } else if (url.includes('/public/')) {
+        } else if (cleanedUrl.includes('/public/')) {
           console.log(`[URL VALIDATOR] Supabase URL is using public access`);
         }
       }
       
       // Check if the URL is properly encoded
-      const hasEncodedChars = url.includes('%20') || url.includes('%2F');
+      const hasEncodedChars = cleanedUrl.includes('%20') || cleanedUrl.includes('%2F');
       console.log(`[URL VALIDATOR] URL has encoded characters: ${hasEncodedChars}`);
+      
+      // Ensure CORS headers will work by checking URL structure
+      if (cleanedUrl.includes('.supabase.co/storage/v1/object/public')) {
+        console.log('[URL VALIDATOR] URL appears to be a valid Supabase storage URL format');
+      }
     }
     
-    console.log(`[URL VALIDATOR] Final validated URL: ${url.substring(0, 50)}...`);
-    return url;
+    console.log(`[URL VALIDATOR] Final validated URL: ${cleanedUrl.substring(0, 50)}...`);
+    return cleanedUrl;
   } catch (e) {
     console.error(`[URL VALIDATOR] Error sanitizing URL: ${e}`);
-    return url; // Return original if sanitizing fails
+    return cleanedUrl; // Return cleaned url if sanitizing fails
   }
 };
 
@@ -92,6 +108,7 @@ export const testVideoPlayability = async (url: string): Promise<boolean> => {
   try {
     // Create a temporary video element to test playability
     const video = document.createElement('video');
+    video.crossOrigin = "anonymous"; // Add CORS attribute
     
     // Set up event listeners for success and failure
     return new Promise((resolve) => {
@@ -190,7 +207,7 @@ export const manualTestVideoUrl = (url: string) => {
     messageDiv.style.width = '320px';
     messageDiv.style.padding = '10px';
     messageDiv.style.background = 'rgba(0,0,0,0.8)';
-    messageDiv.style.color = '#fff';
+    messageDiv.color = '#fff';
     messageDiv.style.zIndex = '10000';
     messageDiv.style.fontSize = '12px';
     messageDiv.textContent = 'Testing video URL... Click to close.';

@@ -1,5 +1,7 @@
 
 import { supabase } from "@/integrations/supabase/client";
+import { validateVideoUrl } from "./videoUrlValidator";
+import { useToast } from "@/hooks/use-toast";
 
 interface TranscriptSearchResult {
   videos: string[];
@@ -18,7 +20,15 @@ export const fetchVideos = async (): Promise<string[]> => {
     }
 
     // Extract keywords (splitting by space for simplicity)
-    const keywords = storedText.split(" ").slice(0, 3); // Pick first 3 words
+    const keywords = storedText.split(" ")
+      .filter(word => word.trim().length >= 3) // Only use words with 3+ characters
+      .slice(0, 3); // Pick first 3 substantial words
+    
+    if (keywords.length === 0) {
+      console.warn("No valid keywords found in transcript");
+      return [];
+    }
+    
     console.log("Extracted Keywords:", keywords);
 
     // Query Supabase
@@ -26,7 +36,9 @@ export const fetchVideos = async (): Promise<string[]> => {
       .from("videos")
       .select("video_url")
       .or(
-        `video_tag1.ilike.%${keywords[0]}%, video_tag2.ilike.%${keywords[1]}%, video_tag3.ilike.%${keywords[2]}%`
+        keywords.map((keyword, index) => 
+          `video_tag${index + 1}.ilike.%${keyword}%`
+        ).join(", ")
       );
 
     if (error) {
@@ -34,9 +46,17 @@ export const fetchVideos = async (): Promise<string[]> => {
       return [];
     }
 
-    // Extract video URLs
-    const videoUrls = data.map((video) => video.video_url);
-    console.log("Fetched Video URLs:", videoUrls);
+    if (!data || data.length === 0) {
+      console.log("No videos found matching keywords:", keywords);
+      return [];
+    }
+
+    // Extract and validate video URLs
+    const videoUrls = data
+      .map((video) => validateVideoUrl(video.video_url))
+      .filter(url => !!url); // Filter out invalid URLs
+      
+    console.log("Fetched and validated Video URLs:", videoUrls);
     return videoUrls;
   } catch (error) {
     console.error("Unexpected error:", error);
@@ -57,10 +77,13 @@ export const fetchVideosWithDetails = async (): Promise<TranscriptSearchResult> 
     console.log("Transcript Search: Using transcript:", storedText);
 
     // Extract keywords (splitting by space for simplicity)
-    const keywords = storedText.split(" ").slice(0, 3); // Pick first 3 words
+    const keywords = storedText.split(" ")
+      .filter(word => word.trim().length >= 3) // Only use words with 3+ characters
+      .slice(0, 3); // Pick first 3 substantial words
+    
     console.log("Transcript Search: Extracted Keywords:", keywords);
 
-    if (keywords.length === 0 || (keywords.length === 1 && keywords[0].trim() === "")) {
+    if (keywords.length === 0) {
       return { videos: [], success: false, error: "No valid keywords extracted from transcript" };
     }
 
@@ -68,7 +91,8 @@ export const fetchVideosWithDetails = async (): Promise<TranscriptSearchResult> 
     const conditions = keywords
       .filter(k => k && k.trim().length > 0)
       .map((keyword, index) => {
-        const tag = `video_tag${index + 1}`;
+        // Use modulo to cycle through the 3 tag columns if we have more than 3 keywords
+        const tag = `video_tag${(index % 3) + 1}`;
         return `${tag}.ilike.%${keyword}%`;
       })
       .join(", ");
@@ -91,12 +115,19 @@ export const fetchVideosWithDetails = async (): Promise<TranscriptSearchResult> 
       return { videos: [], success: false, error: `No videos found matching keywords: ${keywords.join(", ")}` };
     }
 
-    // Extract video URLs
-    const videoUrls = data.map((video) => video.video_url).filter(url => url);
-    console.log("Transcript Search: Fetched Video URLs:", videoUrls);
+    // Extract and validate video URLs
+    const videoUrls = data
+      .map(video => validateVideoUrl(video.video_url))
+      .filter(url => !!url); // Filter out invalid URLs
+    
+    console.log("Transcript Search: Fetched and validated Video URLs:", videoUrls);
     
     if (videoUrls.length === 0) {
-      return { videos: [], success: false, error: "Found matching videos but URLs were empty" };
+      return { 
+        videos: [], 
+        success: false, 
+        error: "Found matching videos but URLs were invalid or inaccessible" 
+      };
     }
     
     return { videos: videoUrls, success: true };
@@ -107,5 +138,53 @@ export const fetchVideosWithDetails = async (): Promise<TranscriptSearchResult> 
       success: false, 
       error: `Unexpected error: ${error instanceof Error ? error.message : 'Unknown error'}`
     };
+  }
+};
+
+// New function to test if the video URLs are accessible directly in the browser
+export const testVideoUrls = async (): Promise<{url: string, accessible: boolean}[]> => {
+  try {
+    // Get all videos from database
+    const { data, error } = await supabase
+      .from("videos")
+      .select("video_url");
+      
+    if (error) {
+      console.error("Error fetching videos for testing:", error);
+      return [];
+    }
+    
+    if (!data || data.length === 0) {
+      console.warn("No videos found in database to test");
+      return [];
+    }
+    
+    // Test each URL and return results
+    const results = await Promise.all(
+      data.map(async (video) => {
+        const validUrl = validateVideoUrl(video.video_url);
+        if (!validUrl) {
+          return { url: video.video_url, accessible: false };
+        }
+        
+        // Use fetch to test if the URL is accessible
+        try {
+          const response = await fetch(validUrl, { 
+            method: 'HEAD',
+            mode: 'no-cors' // This allows checking URLs even with CORS restrictions
+          });
+          
+          return { url: validUrl, accessible: true };
+        } catch (e) {
+          console.error("URL not accessible:", validUrl, e);
+          return { url: validUrl, accessible: false };
+        }
+      })
+    );
+    
+    return results;
+  } catch (error) {
+    console.error("Error testing video URLs:", error);
+    return [];
   }
 };
