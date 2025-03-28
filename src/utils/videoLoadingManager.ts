@@ -1,4 +1,3 @@
-
 /**
  * Video Loading Manager
  * 
@@ -12,6 +11,25 @@ const urlValidationCache = new Map<string, string>();
 // Track if we're currently processing a video request
 let isProcessingRequest = false;
 let currentVideoUrl: string | null = null;
+
+// Video element readiness state
+let videoElementReady = false;
+
+// Queue for pending video requests
+type VideoRequest = {
+  id: number;
+  url: string;
+  name: string;
+  keyword: string;
+};
+const pendingVideoRequests: VideoRequest[] = [];
+
+// Active locks
+const activeLocks = new Map<string, number>();
+
+// Keep track of processed transcripts to avoid duplicates
+const processedTranscripts = new Set<string>();
+const transcriptProcessedTimestamps = new Map<string, number>();
 
 /**
  * Validate search keywords to prevent common issues
@@ -125,10 +143,156 @@ export const getVideoLoadingStatus = (): { isProcessing: boolean, currentUrl: st
   };
 };
 
+/**
+ * Acquire a lock for processing a video request
+ */
+export const acquireVideoLoadingLock = (requestId: string): boolean => {
+  if (isProcessingRequest) {
+    console.log(`[VideoLoadingManager] Cannot acquire lock for ${requestId} - already processing`);
+    return false;
+  }
+  
+  console.log(`[VideoLoadingManager] Lock acquired for ${requestId}`);
+  isProcessingRequest = true;
+  activeLocks.set(requestId, Date.now());
+  return true;
+};
+
+/**
+ * Release a video loading lock
+ */
+export const releaseVideoLoadingLock = (requestId: string): void => {
+  console.log(`[VideoLoadingManager] Lock released for ${requestId}`);
+  isProcessingRequest = false;
+  activeLocks.delete(requestId);
+  
+  // Process any pending requests
+  setTimeout(processPendingRequests, 500);
+};
+
+/**
+ * Queue a video request for later processing
+ */
+export const queueVideoRequest = (video: VideoRequest): void => {
+  console.log(`[VideoLoadingManager] Queuing video request: ${video.name}`);
+  
+  // Check if this video is already in the queue
+  const isDuplicate = pendingVideoRequests.some(v => v.id === video.id && v.url === video.url);
+  
+  if (!isDuplicate) {
+    pendingVideoRequests.push(video);
+    console.log(`[VideoLoadingManager] Video queued: ${video.name}`);
+  } else {
+    console.log(`[VideoLoadingManager] Video already in queue: ${video.name}`);
+  }
+};
+
+/**
+ * Process any pending video requests
+ */
+export const processPendingRequests = (): void => {
+  if (pendingVideoRequests.length === 0) return;
+  
+  if (isProcessingRequest) {
+    console.log(`[VideoLoadingManager] Cannot process pending requests - already processing`);
+    return;
+  }
+  
+  const nextVideo = pendingVideoRequests.shift();
+  if (nextVideo) {
+    console.log(`[VideoLoadingManager] Processing pending video request: ${nextVideo.name}`);
+    
+    // Dispatch custom event to process this video
+    window.dispatchEvent(new CustomEvent('process_pending_video', {
+      detail: nextVideo
+    }));
+  }
+};
+
+/**
+ * Check if a video request is currently being processed
+ */
+export const isProcessingVideo = (): boolean => {
+  return isProcessingRequest;
+};
+
+/**
+ * Reset the video loading state
+ */
+export const resetVideoLoadingState = (): void => {
+  console.log('[VideoLoadingManager] Resetting video loading state');
+  isProcessingRequest = false;
+  currentVideoUrl = null;
+  activeLocks.clear();
+};
+
+/**
+ * Check if a transcript is new and hasn't been processed recently
+ */
+export const isNewTranscript = (transcript: string): boolean => {
+  if (!transcript) return false;
+  
+  // Clean and normalize the transcript
+  const normalizedTranscript = transcript.toLowerCase().trim();
+  
+  // Check if we've seen this exact transcript before
+  if (processedTranscripts.has(normalizedTranscript)) {
+    const lastProcessedTime = transcriptProcessedTimestamps.get(normalizedTranscript) || 0;
+    const timeSince = Date.now() - lastProcessedTime;
+    
+    // Don't process the same transcript if it was processed in the last 5 seconds
+    if (timeSince < 5000) {
+      console.log(`[VideoLoadingManager] Transcript already processed recently: "${normalizedTranscript.substring(0, 30)}..."`);
+      return false;
+    }
+  }
+  
+  // Add to processed set with timestamp
+  processedTranscripts.add(normalizedTranscript);
+  transcriptProcessedTimestamps.set(normalizedTranscript, Date.now());
+  
+  // Keep the processed transcript set from growing too large
+  if (processedTranscripts.size > 50) {
+    const oldestTranscript = Array.from(processedTranscripts)[0];
+    processedTranscripts.delete(oldestTranscript);
+    transcriptProcessedTimestamps.delete(oldestTranscript);
+  }
+  
+  return true;
+};
+
+/**
+ * Set the readiness state of the video element
+ */
+export const setVideoElementReady = (isReady: boolean): void => {
+  console.log(`[VideoLoadingManager] Video element ready state set to: ${isReady}`);
+  videoElementReady = isReady;
+  
+  if (isReady && pendingVideoRequests.length > 0) {
+    processPendingRequests();
+  }
+};
+
+/**
+ * Check if the video element is ready
+ */
+export const isVideoElementReady = (): boolean => {
+  return videoElementReady;
+};
+
 export default {
   validateSearchKeyword,
   requestVideoLoad,
   completeVideoLoad,
   canLoadVideo,
-  getVideoLoadingStatus
+  getVideoLoadingStatus,
+  acquireVideoLoadingLock,
+  releaseVideoLoadingLock,
+  queueVideoRequest,
+  processPendingRequests,
+  isProcessingVideo,
+  resetVideoLoadingState,
+  isNewTranscript,
+  setVideoElementReady,
+  isVideoElementReady
 };
