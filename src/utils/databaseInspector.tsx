@@ -13,7 +13,7 @@ export async function inspectVideosTable() {
   try {
     // Fetch all records from the Videos table
     const { data, error } = await supabase
-      .from('Videos')
+      .from('videos')
       .select('*');
     
     if (error) {
@@ -57,7 +57,7 @@ export async function searchVideosByTagValue(tagValue: string) {
   try {
     // Run a direct SQL query to find any videos with the specified tag
     const { data, error } = await supabase
-      .from('Videos')
+      .from('videos')
       .select('*')
       .or(`video_tag1.eq.${tagValue},video_tag2.eq.${tagValue},video_tag3.eq.${tagValue}`);
     
@@ -66,7 +66,7 @@ export async function searchVideosByTagValue(tagValue: string) {
     
     // Also try an ilike search for case-insensitive matching
     const { data: ilikeData, error: ilikeError } = await supabase
-      .from('Videos')
+      .from('videos')
       .select('*')
       .or(`video_tag1.ilike.%${tagValue}%,video_tag2.ilike.%${tagValue}%,video_tag3.ilike.%${tagValue}%`);
     
@@ -116,7 +116,7 @@ export async function addVideoToDatabase(
     
     // Insert the record into the Videos table
     const { data, error } = await supabase
-      .from('Videos')
+      .from('videos')
       .insert(videoRecord)
       .select();
     

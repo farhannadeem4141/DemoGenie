@@ -1,4 +1,3 @@
-
 import { searchAndPlayVideo } from '@/services/video/searchAndPlay';
 import { searchVideosByKeyword } from '@/services/video/keywordSearch';
 import { supabase } from '@/integrations/supabase/client';
@@ -259,7 +258,7 @@ export async function testVoiceInputVideoSearch(customKeyword?: string) {
               const checkAllVideos = async () => {
                 try {
                   const { data, error } = await supabase
-                    .from('Videos')
+                    .from('videos')
                     .select('*')
                     .limit(10);
                   

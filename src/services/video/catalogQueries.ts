@@ -8,7 +8,7 @@ export async function queryVideosWithCatalogTag(): Promise<VideoSearchResult> {
   try {
     // First check if the Videos table exists and has any data
     const { count, error: countError } = await supabase
-      .from('Videos')
+      .from('videos')
       .select('*', { count: 'exact', head: true });
     
     console.log("Total records in Videos table:", count);
@@ -32,7 +32,7 @@ export async function queryVideosWithCatalogTag(): Promise<VideoSearchResult> {
       
       // Add a sample catalog video since the table is empty
       const { data: newVideo, error: insertError } = await supabase
-        .from('Videos')
+        .from('videos')
         .insert({
           video_name: 'WhatsApp Catalog Feature',
           video_url: 'https://aalbdeydgpallvcmmsvq.supabase.co/storage/v1/object/sign/DemoGenie/What%20is%20WhatsApp.mp4?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1cmwiOiJEZW1vR2VuaWUvV2hhdCBpcyBXaGF0c0FwcC5tcDQiLCJpYXQiOjE3NDExMDI1OTEsImV4cCI6MTc3MjYzODU5MX0.285hWWaFnlZJ8wLkuYaAyf_sLH0wjDzxv4kgXsGEzO4',
@@ -71,7 +71,7 @@ export async function queryVideosWithCatalogTag(): Promise<VideoSearchResult> {
     
     // Try with case-insensitive search for "catalog" in all tag columns
     const { data: catalogData, error: catalogError } = await supabase
-      .from('Videos')
+      .from('videos')
       .select('*')
       .or('video_tag1.ilike.%catalog%,video_tag2.ilike.%catalog%,video_tag3.ilike.%catalog%');
     
@@ -94,7 +94,7 @@ export async function queryVideosWithCatalogTag(): Promise<VideoSearchResult> {
     if (!catalogData || catalogData.length === 0) {
       // If no videos found with catalog tag, get the first video as fallback
       const { data: firstVideo, error: firstVideoError } = await supabase
-        .from('Videos')
+        .from('videos')
         .select('*')
         .limit(1)
         .maybeSingle();
@@ -159,7 +159,7 @@ export async function addTestVideo(
 ): Promise<boolean> {
   try {
     const { data, error } = await supabase
-      .from('Videos')
+      .from('videos')
       .insert({
         video_name: videoName,
         video_url: videoUrl,
