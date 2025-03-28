@@ -25,6 +25,7 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
   const { toast } = useToast();
   const [videoKey, setVideoKey] = useState('');
   const [currentVideoId, setCurrentVideoId] = useState<number | null>(null);
+  const [currentVideoUrl, setCurrentVideoUrl] = useState<string | null>(null);
   const processingKeywordRef = useRef(false);
   const lastProcessedInputRef = useRef('');
   const [videoRenderAttempts, setVideoRenderAttempts] = useState(0);
@@ -81,11 +82,14 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
       console.log("TranscriptListener: No current video, hiding player");
       setIsVideoVisible(false);
       setCurrentVideoId(null);
+      setCurrentVideoUrl(null);
       return;
     }
     
-    if (currentVideoId === currentVideo.id && isVideoVisible) {
-      console.log("TranscriptListener: Video ID unchanged and already visible, skipping remount");
+    if (currentVideoId === currentVideo.id && 
+        currentVideoUrl === currentVideo.video_url && 
+        isVideoVisible) {
+      console.log("TranscriptListener: Video ID and URL unchanged and already visible, skipping remount");
       return;
     }
     
@@ -109,8 +113,9 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
     }
     
     setCurrentVideoId(currentVideo.id);
+    setCurrentVideoUrl(currentVideo.video_url);
     
-    const videoKeyValue = `video-${currentVideo.id}-${Date.now()}-${videoRenderAttempts}`;
+    const videoKeyValue = `video-${currentVideo.id}-${Date.now()}-${videoRenderAttempts}-${currentVideo.video_url.substring(currentVideo.video_url.lastIndexOf('/') + 1, currentVideo.video_url.lastIndexOf('.') || currentVideo.video_url.length).slice(0, 20)}`;
     console.log(`TranscriptListener: Setting video key to ${videoKeyValue}`);
     setVideoKey(videoKeyValue);
     
@@ -131,7 +136,7 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
         clearTimeout(videoVisibilityTimerRef.current);
       }
     };
-  }, [currentVideo, toast, videoRenderAttempts, isVideoVisible, currentVideoId]);
+  }, [currentVideo, toast, videoRenderAttempts]);
 
   useEffect(() => {
     console.log("TranscriptListener: Recording status prop changed:", isRecording);
@@ -215,15 +220,14 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
             };
             console.log("TranscriptListener: Setting catalog video directly:", catalogVideo);
             
-            if (catalogVideo.video_name) {
-              setCurrentVideo(catalogVideo);
-              
-              toast({
-                title: "Catalog Video Found",
-                description: `Now playing: ${catalogVideo.video_name}`,
-                duration: 3000,
-              });
-            }
+            setVideoRenderAttempts(prevAttempts => prevAttempts + 1);
+            setCurrentVideo(catalogVideo);
+            
+            toast({
+              title: "Catalog Video Found",
+              description: `Now playing: ${catalogVideo.video_name}`,
+              duration: 3000,
+            });
             
             processingKeywordRef.current = false;
             setIsSearching(false);
@@ -252,6 +256,7 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
           const videoUrl = result.videos[0];
           const videoName = videoUrl.split('/').pop()?.replace(/%20/g, ' ') || "Video";
           
+          setVideoRenderAttempts(prevAttempts => prevAttempts + 1);
           setCurrentVideo({
             id: Date.now(),
             video_url: videoUrl,
@@ -285,6 +290,7 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
         if (searchResult.success && searchResult.video) {
           console.log("TranscriptListener: Setting video from search result:", searchResult.video);
           
+          setVideoRenderAttempts(prevAttempts => prevAttempts + 1);
           setCurrentVideo({
             id: searchResult.video.id,
             video_url: searchResult.video.video_url,
@@ -335,6 +341,7 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
     const fallbackVideoUrl = "https://boncletesuahajikgrrz.supabase.co/storage/v1/object/public/videos//WhatsApp%20end-to-end%20encryption.mp4";
     console.log("TranscriptListener: Using local fallback video:", fallbackVideoUrl);
     
+    setVideoRenderAttempts(prevAttempts => prevAttempts + 1);
     setCurrentVideo({
       id: 3,
       video_url: fallbackVideoUrl,
@@ -522,6 +529,7 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
     setTimeout(() => {
       setCurrentVideo(null);
       setCurrentVideoId(null);
+      setCurrentVideoUrl(null);
     }, 300);
     
     toast({
@@ -533,7 +541,7 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
 
   useEffect(() => {
     if (currentVideo && isVideoVisible && videoKey) {
-      console.log(`TranscriptListener: Video should be visible now. Key: ${videoKey}, Attempt: ${videoRenderAttempts}`);
+      console.log(`TranscriptListener: Video should be visible now. Key: ${videoKey}, Attempt: ${videoRenderAttempts}, URL: ${currentVideo.video_url}`);
     }
   }, [currentVideo, isVideoVisible, videoKey, videoRenderAttempts]);
 
@@ -575,7 +583,7 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
               <VideoPlayer 
                 key={videoKey}
                 videoUrl={currentVideo.video_url} 
-                videoName={currentVideo.video_name || `Video related to "${currentVideo.keyword}"`}
+                videoName={currentVideo.video_name}
                 onEnded={() => console.log("TranscriptListener: Video playback ended")}
                 onError={handleVideoError}
                 onClose={handleVideoClose}
