@@ -157,23 +157,6 @@ export function useConversationHistory() {
     }
   }, [messages]);
 
-  useEffect(() => {
-    if (!initialVideoLoadedRef.current && !currentVideo && !lastVideoRef.current) {
-      initialVideoLoadedRef.current = true;
-      
-      const introVideo = {
-        id: 0,
-        video_url: 'https://aalbdeydgpallvcmmsvq.supabase.co/storage/v1/object/sign/DemoGenie/WhatsApp%20Intro%20By%20Sophie.mp4?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1cmwiOiJEZW1vR2VuaWUvV2hhdHNBcHAgSW50cm8gQnkgU29waGllLm1wNCIsImlhdCI6MTc0MTEwMjcwOSwiZXhwIjoxNzcyNjM4NzA5fQ.rvjigS14YSrlPd2VqEDpQHHQlCsOSivOegXkciDnnEA',
-        video_name: 'WhatsApp Intro By Sophie',
-        keyword: 'WhatsApp'
-      };
-      
-      console.log("Setting initial intro video");
-      lastVideoRef.current = introVideo;
-      setCurrentVideo(introVideo);
-    }
-  }, [toast, currentVideo]);
-  
   const extractKeywords = (text: string): string[] => {
     const cleanText = text.replace(/[^\w\s]/g, '');
     console.log("%c [KEYWORD LOG] ========== KEYWORD EXTRACTION ==========", "background: #4361ee; color: white; padding: 4px; border-radius: 4px; font-weight: bold;");
