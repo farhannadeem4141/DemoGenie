@@ -1,3 +1,4 @@
+
 /**
  * Utility for validating and sanitizing video URLs with enhanced logging
  */
@@ -207,7 +208,7 @@ export const manualTestVideoUrl = (url: string) => {
     messageDiv.style.width = '320px';
     messageDiv.style.padding = '10px';
     messageDiv.style.background = 'rgba(0,0,0,0.8)';
-    messageDiv.color = '#fff';
+    messageDiv.style.color = '#fff'; // Fix: Changed from setting color property directly
     messageDiv.style.zIndex = '10000';
     messageDiv.style.fontSize = '12px';
     messageDiv.textContent = 'Testing video URL... Click to close.';

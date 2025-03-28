@@ -34,11 +34,18 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const [loadCount, setLoadCount] = useState(0);
   const [isRefReady, setIsRefReady] = useState(false);
   const [processedUrl, setProcessedUrl] = useState<string>("");
+  const playAttemptRef = useRef(false);
   
   // Check if video ref is available immediately after mount
   useEffect(() => {
     mountedRef.current = true;
     console.log("VideoPlayer mounted with URL:", videoUrl);
+    
+    // Reset state on new video URL
+    setErrorLoading(false);
+    setIsLoading(true);
+    loadAttemptRef.current = 0;
+    playAttemptRef.current = false;
     
     // Process the URL first - This is important for Supabase URLs
     const cleanedUrl = videoUrl.trim().replace(/\n/g, '');
@@ -85,7 +92,14 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     
     try {
       console.log("VideoPlayer: Setting video src and loading...");
-      videoElement.src = processedUrl;
+      
+      // Add cache busting parameter to prevent caching issues
+      const cacheBuster = `?cb=${Date.now()}`;
+      const urlWithCache = processedUrl.includes('?') 
+        ? `${processedUrl}&cb=${Date.now()}`  
+        : `${processedUrl}${cacheBuster}`;
+        
+      videoElement.src = urlWithCache;
       videoElement.load();
     } catch (e) {
       console.error("VideoPlayer: Error setting source or loading:", e);
@@ -115,24 +129,39 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       
       setIsLoading(false);
       
-      console.log("VideoPlayer: Attempting to play video...");
-      videoElement.play()
-        .then(() => {
-          console.log("VideoPlayer: Video started playing successfully");
-          toast({
-            title: "Video playback started",
-            description: videoName || "Video is now playing",
-            duration: 3000,
-          });
-        })
-        .catch(err => {
-          console.error("VideoPlayer: Error playing video:", err);
-          if (mountedRef.current) {
-            setErrorLoading(true);
-            setErrorDetails(err instanceof Error ? err.message : "Unknown error playing video");
+      // Only attempt to play if we haven't already tried
+      if (!playAttemptRef.current) {
+        playAttemptRef.current = true;
+        console.log("VideoPlayer: Attempting to play video...");
+        
+        // Small delay before playing to allow for metadata processing
+        setTimeout(() => {
+          if (videoElement && mountedRef.current) {
+            videoElement.play()
+              .then(() => {
+                console.log("VideoPlayer: Video started playing successfully");
+                toast({
+                  title: "Video playback started",
+                  description: videoName || "Video is now playing",
+                  duration: 3000,
+                });
+              })
+              .catch(err => {
+                console.error("VideoPlayer: Error playing video:", err);
+                if (mountedRef.current) {
+                  // Don't set error state for autoplay errors - these are expected on mobile
+                  if (err.name === "NotAllowedError") {
+                    console.log("VideoPlayer: Autoplay blocked, user needs to click play");
+                  } else {
+                    setErrorLoading(true);
+                    setErrorDetails(err instanceof Error ? err.message : "Unknown error playing video");
+                    if (onError) onError();
+                  }
+                }
+              });
           }
-          if (onError) onError();
-        });
+        }, 300);
+      }
     };
     
     const handleLoadError = (e: Event) => {
@@ -182,6 +211,9 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     setErrorLoading(true);
     setIsLoading(false);
     
+    // Reset play attempt flag so we'll try again on retry
+    playAttemptRef.current = false;
+    
     // Check if the URL is a Supabase URL with double slashes - this is a common issue
     const hasDoubleSlash = processedUrl.includes('//storage/v1/object/public/') || 
                            processedUrl.includes('//videos//');
@@ -221,6 +253,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     setErrorLoading(false);
     setIsLoading(true);
     setLoadCount(prev => prev + 1);
+    playAttemptRef.current = false; // Reset play attempt flag
     
     try {
       // Try adding a cache-busting parameter to the URL
@@ -232,17 +265,6 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       console.log("VideoPlayer: Retrying with cache buster:", urlWithCacheBuster);
       videoRef.current.src = urlWithCacheBuster;
       videoRef.current.load();
-      videoRef.current.play()
-        .then(() => console.log("VideoPlayer: Retry play successful"))
-        .catch(err => {
-          console.error("VideoPlayer: Retry play failed:", err);
-          if (mountedRef.current) {
-            setErrorLoading(true);
-            setIsLoading(false);
-            setErrorDetails(err instanceof Error ? err.message : "Unknown error on retry");
-            if (onError) onError();
-          }
-        });
     } catch (e) {
       console.error("VideoPlayer: Error during retry:", e);
       setErrorLoading(true);
@@ -353,7 +375,9 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
           )}
           <video
             ref={videoRef}
+            playsInline  
             controls
+            controlsList="nodownload"
             className={cn(
               "w-full h-auto",
               isVertical ? "max-w-[80%] max-h-[65vh] object-contain" : "w-full"
@@ -363,7 +387,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
               if (onEnded) onEnded();
             }}
             onError={handleVideoError}
-            preload="auto"
+            preload="metadata"
             muted={isMuted}
             crossOrigin="anonymous"
           >
