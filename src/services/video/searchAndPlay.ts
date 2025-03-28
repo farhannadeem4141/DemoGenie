@@ -1,3 +1,4 @@
+
 import { supabase } from '@/integrations/supabase/client';
 import { VideoSearchResult } from './types';
 import { validateVideoUrl } from './videoUrlValidator';
@@ -46,7 +47,7 @@ export async function searchAndPlayVideo(keyword: string): Promise<VideoSearchDe
   
   // First perform a database health check
   const { count, error: dbCheckError } = await supabase
-    .from('Videos')
+    .from('videos') // Changed from 'Videos' to lowercase 'videos'
     .select('*', { count: 'exact', head: true });
   
   if (dbCheckError) {
@@ -65,7 +66,7 @@ export async function searchAndPlayVideo(keyword: string): Promise<VideoSearchDe
   
   // Construct the query to search in multiple tag columns
   let query = supabase
-    .from('Videos')
+    .from('videos') // Changed from 'Videos' to lowercase 'videos'
     .select('*');
   
   // Build both exact and case-insensitive conditions
@@ -75,7 +76,7 @@ export async function searchAndPlayVideo(keyword: string): Promise<VideoSearchDe
   query = query.or(exactQuery + ',' + icontainsQuery);
   
   // Generate query string for logging
-  const queryString = `SELECT * FROM "Videos" WHERE (${exactQuery}) OR (${icontainsQuery})`;
+  const queryString = `SELECT * FROM "videos" WHERE (${exactQuery}) OR (${icontainsQuery})`; // Changed from "Videos" to lowercase "videos"
   console.log("%c [VIDEO SEARCH] SQL query: " + queryString, "background: #4CAF50; color: white; padding: 2px; border-radius: 4px;");
   
   // Execute the query
@@ -118,7 +119,7 @@ export async function searchAndPlayVideo(keyword: string): Promise<VideoSearchDe
     console.log("%c [VIDEO SEARCH] Trying more lenient search...", "background: #4CAF50; color: white; padding: 2px; border-radius: 4px;");
     
     const lenientQuery = supabase
-      .from('Videos')
+      .from('videos') // Changed from 'Videos' to lowercase 'videos'
       .select('*')
       .or(`video_tag1.ilike.%${normalizedKeyword.toLowerCase()}%,video_tag2.ilike.%${normalizedKeyword.toLowerCase()}%,video_tag3.ilike.%${normalizedKeyword.toLowerCase()}%`);
     

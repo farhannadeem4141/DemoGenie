@@ -12,7 +12,7 @@ export async function searchVideosByKeyword(keyword: string): Promise<VideoSearc
     
     // Construct the query to search in multiple tag columns
     let query = supabase
-      .from('Videos')
+      .from('videos') // Changed from 'Videos' to lowercase 'videos'
       .select('*');
     
     // Build both exact and case-insensitive conditions
@@ -25,7 +25,7 @@ export async function searchVideosByKeyword(keyword: string): Promise<VideoSearc
     console.log("%c [DB QUERY] Search details - looking for: " + normalizedKeyword, "background: #ff9e00; color: black; padding: 2px; border-radius: 4px;");
     
     // Generate query string for logging (without toSql method)
-    const queryString = `SELECT * FROM "Videos" WHERE ${exactQuery} OR ${icontainsQuery}`;
+    const queryString = `SELECT * FROM "videos" WHERE ${exactQuery} OR ${icontainsQuery}`; // Changed from "Videos" to lowercase "videos"
     console.log("%c [DB QUERY] SQL query: " + queryString, "background: #ff9e00; color: black; padding: 2px; border-radius: 4px;");
     
     // Execute the query
@@ -56,12 +56,12 @@ export async function searchVideosByKeyword(keyword: string): Promise<VideoSearc
       console.log("%c [DB QUERY] Trying more lenient search...", "background: #ff9e00; color: black; padding: 2px; border-radius: 4px;");
       
       const lenientQuery = supabase
-        .from('Videos')
+        .from('videos') // Changed from 'Videos' to lowercase 'videos'
         .select('*')
         .or(`video_tag1.ilike.%${normalizedKeyword.toLowerCase()}%,video_tag2.ilike.%${normalizedKeyword.toLowerCase()}%,video_tag3.ilike.%${normalizedKeyword.toLowerCase()}%`);
       
       // Generate lenient query string for logging
-      const lenientQueryString = `SELECT * FROM "Videos" WHERE video_tag1 ILIKE %${normalizedKeyword.toLowerCase()}% OR video_tag2 ILIKE %${normalizedKeyword.toLowerCase()}% OR video_tag3 ILIKE %${normalizedKeyword.toLowerCase()}%`;
+      const lenientQueryString = `SELECT * FROM "videos" WHERE video_tag1 ILIKE %${normalizedKeyword.toLowerCase()}% OR video_tag2 ILIKE %${normalizedKeyword.toLowerCase()}% OR video_tag3 ILIKE %${normalizedKeyword.toLowerCase()}%`; // Changed from "Videos" to lowercase "videos"
       console.log("%c [DB QUERY] Lenient SQL query: " + lenientQueryString, "background: #ff9e00; color: black; padding: 2px; border-radius: 4px;");
       
       const { data: lenientData, error: lenientError } = await lenientQuery;
