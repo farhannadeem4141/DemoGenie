@@ -10,15 +10,38 @@ const getPublicVideoUrl = (videoPath: string): string | null => {
     
     // If it's already a fully formed URL, validate and return it
     if (videoPath.startsWith('http')) {
-      return validateVideoUrl(videoPath);
+      console.log("[URL GENERATOR] Processing existing URL:", videoPath);
+      const validatedUrl = validateVideoUrl(videoPath);
+      if (validatedUrl) {
+        console.log("[URL GENERATOR] URL is already valid");
+        return validatedUrl;
+      } else {
+        console.log("[URL GENERATOR] Existing URL is invalid, trying to generate new public URL");
+      }
     }
     
+    // Clean up the path if needed - remove any leading slashes
+    const cleanPath = videoPath.replace(/^\/+/, '');
+    console.log("[URL GENERATOR] Generating public URL for path:", cleanPath);
+    
     // If it's a storage path, convert to public URL
-    const { data } = supabase.storage.from("videos").getPublicUrl(videoPath);
-    console.log("Generated public URL:", data.publicUrl);
-    return validateVideoUrl(data.publicUrl);
+    const { data } = supabase.storage.from("videos").getPublicUrl(cleanPath);
+    
+    if (!data || !data.publicUrl) {
+      console.error("[URL GENERATOR] Failed to generate public URL for path:", cleanPath);
+      return null;
+    }
+    
+    console.log("[URL GENERATOR] Generated public URL:", data.publicUrl);
+    const validatedUrl = validateVideoUrl(data.publicUrl);
+    
+    if (!validatedUrl) {
+      console.error("[URL GENERATOR] Generated URL failed validation:", data.publicUrl);
+    }
+    
+    return validatedUrl || data.publicUrl; // Return the URL even if validation fails as a fallback
   } catch (error) {
-    console.error("Error generating public video URL:", error);
+    console.error("[URL GENERATOR] Error generating public video URL:", error);
     return null;
   }
 };
@@ -27,7 +50,7 @@ export async function queryVideosWithCatalogTag(): Promise<VideoSearchResult> {
   console.log("Running catalog tag query...");
   
   try {
-    // First check if the Videos table exists and has any data
+    // First check if the videos table exists and has any data
     const { count, error: countError } = await supabase
       .from('videos')
       .select('*', { count: 'exact', head: true });
@@ -197,26 +220,38 @@ export async function queryVideosWithCatalogTag(): Promise<VideoSearchResult> {
     // Process and validate all found catalog videos
     const validatedVideos = await Promise.all(catalogData.map(async (video) => {
       console.log(`Validating video URL for "${video.video_name}":`, video.video_url);
-      const validatedUrl = validateVideoUrl(video.video_url);
+      
+      // First try direct validation
+      let validatedUrl = validateVideoUrl(video.video_url);
       
       if (!validatedUrl) {
-        console.error(`Video "${video.video_name}" has invalid URL format:`, video.video_url);
+        console.log(`Video "${video.video_name}" URL needs public URL generation`);
         
         // Attempt to generate a public URL
         const publicUrl = getPublicVideoUrl(video.video_url);
         if (publicUrl) {
           console.log(`Generated public URL for video "${video.video_name}":`, publicUrl);
           // Update the database with the public URL
-          await supabase
-            .from('videos')
-            .update({ video_url: publicUrl })
-            .eq('id', video.id);
+          try {
+            const { error: updateError } = await supabase
+              .from('videos')
+              .update({ video_url: publicUrl })
+              .eq('id', video.id);
+              
+            if (updateError) {
+              console.error(`Failed to update video URL in database:`, updateError);
+            } else {
+              console.log(`Successfully updated video URL in database for ID ${video.id}`);
+            }
+          } catch (updateErr) {
+            console.error(`Exception updating video URL:`, updateErr);
+          }
           
           // Update the returned object with the public URL
           return { ...video, video_url: publicUrl };
         }
       } else {
-        console.log(`Video "${video.video_name}" URL is valid`);
+        console.log(`Video "${video.video_name}" URL is already valid`);
       }
       
       return video;

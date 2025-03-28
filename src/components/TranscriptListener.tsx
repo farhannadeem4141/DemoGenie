@@ -3,8 +3,9 @@ import { useConversationHistory } from '@/hooks/useConversationHistory';
 import VideoPlayer from './VideoPlayer';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
-import { queryVideosWithCatalogTag } from '@/services/video';
+import { queryVideosWithCatalogTag, fetchVideos } from '@/services/video';
 import { searchAndPlayVideo } from '@/services/video/searchAndPlay';
+import { VideoFixer } from '@/utils/videoFixerUtil';
 
 interface TranscriptListenerProps {
   className?: string;
@@ -89,6 +90,22 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
     setRecordingStatus(isRecording);
   }, [isRecording]);
 
+  // Add video fixer utility
+  useEffect(() => {
+    // Initialize the video fixer in development mode 
+    if (process.env.NODE_ENV === 'development') {
+      console.log("Initializing video fixer utility in dev mode");
+      VideoFixer.addTestButton();
+      
+      // Run an initial check but don't fix automatically
+      setTimeout(() => {
+        VideoFixer.checkAllVideos().then(result => {
+          console.log("Initial video health check complete:", result);
+        });
+      }, 5000);
+    }
+  }, []);
+
   const handleVoiceInput = async (inputText: string) => {
     if (!inputText || inputText.trim() === '') {
       console.log("TranscriptListener: Empty voice input, skipping");
@@ -117,6 +134,9 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
     });
     
     try {
+      // Save to localStorage for transcript-based search
+      localStorage.setItem('transcript', inputText);
+      
       const savedInputs = JSON.parse(localStorage.getItem('voice_input_history') || '[]');
       const newInput = {
         text: inputText,
@@ -166,6 +186,37 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
         description: `Looking for video related to: "${inputText.substring(0, 30)}${inputText.length > 30 ? '...' : ''}"`,
         duration: 2000,
       });
+
+      // Try the new transcript-based approach first
+      try {
+        console.log("TranscriptListener: Trying transcript-based search first");
+        const videoUrls = await fetchVideos();
+        
+        if (videoUrls && videoUrls.length > 0) {
+          console.log("TranscriptListener: Found videos with transcript search:", videoUrls);
+          
+          // Use the first video
+          setCurrentVideo({
+            id: Date.now(), // Use timestamp as a temporary ID
+            video_url: videoUrls[0],
+            video_name: "Video from transcript search",
+            keyword: inputText
+          });
+          
+          toast({
+            title: "Video Found",
+            description: "Found video using transcript search",
+            duration: 3000,
+          });
+          
+          processingKeywordRef.current = false;
+          return;
+        } else {
+          console.log("TranscriptListener: No videos found with transcript search, falling back to keyword search");
+        }
+      } catch (transcriptError) {
+        console.error("TranscriptListener: Error in transcript search:", transcriptError);
+      }
       
       try {
         const searchResult = await searchAndPlayVideo(inputText);
