@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState, useRef } from 'react';
 import { useConversationHistory } from '@/hooks/useConversationHistory';
 import VideoPlayer from './VideoPlayer';
@@ -16,7 +17,8 @@ import {
   isNewTranscript,
   validateSearchKeyword,
   setVideoElementReady,
-  isVideoElementReady
+  isVideoElementReady,
+  isVideoAlreadyQueued
 } from '@/utils/videoLoadingManager';
 
 interface TranscriptListenerProps {
@@ -208,24 +210,34 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
     
     if (!acquireVideoLoadingLock(requestId)) {
       console.log("TranscriptListener: Already processing a video set request, queueing this one");
-      queueVideoRequest({
-        id: currentVideo.id,
-        url: currentVideo.video_url,
-        name: currentVideo.video_name,
-        keyword: currentVideo.keyword
-      });
+      
+      // Only queue if this video isn't already being handled
+      if (!isVideoAlreadyQueued(currentVideo.id, currentVideo.video_url)) {
+        queueVideoRequest({
+          id: currentVideo.id,
+          url: currentVideo.video_url,
+          name: currentVideo.video_name,
+          keyword: currentVideo.keyword
+        });
+      } else {
+        console.log("TranscriptListener: This video is already being processed or queued");
+      }
       return;
     }
     
     // If the video player is not ready yet, queue this request and release the lock
     if (!isVideoElementReady()) {
       console.log("TranscriptListener: Video player not ready, queueing request and waiting");
-      queueVideoRequest({
-        id: currentVideo.id,
-        url: currentVideo.video_url,
-        name: currentVideo.video_name,
-        keyword: currentVideo.keyword
-      });
+      
+      // Only queue if not already in progress
+      if (!isVideoAlreadyQueued(currentVideo.id, currentVideo.video_url)) {
+        queueVideoRequest({
+          id: currentVideo.id,
+          url: currentVideo.video_url,
+          name: currentVideo.video_name,
+          keyword: currentVideo.keyword
+        });
+      }
       releaseVideoLoadingLock(requestId);
       return;
     }
@@ -482,6 +494,12 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
   }): void => {
     // Generate a unique request ID
     const requestId = `handle-video-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+    
+    // Check if this video is already being processed before trying to acquire a lock
+    if (isVideoAlreadyQueued(video.id, video.url)) {
+      console.log(`TranscriptListener: Video ${video.name} already in processing queue, skipping duplicate request`);
+      return;
+    }
     
     // Only proceed if we can acquire a lock
     if (!acquireVideoLoadingLock(requestId)) {

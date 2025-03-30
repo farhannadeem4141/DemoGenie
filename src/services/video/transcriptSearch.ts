@@ -1,7 +1,6 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { validateVideoUrl } from "./videoUrlValidator";
-import { validateSearchKeyword } from "@/utils/videoLoadingManager";
+import { validateSearchKeyword, isNewTranscript } from "@/utils/videoLoadingManager";
 
 interface TranscriptSearchResult {
   videos: string[];
@@ -20,6 +19,12 @@ export const fetchVideos = async (): Promise<string[]> => {
     }
 
     console.log("Transcript Search - Raw transcript:", storedText);
+
+    // Check if this is a duplicate transcript we've already processed
+    if (!isNewTranscript(storedText)) {
+      console.log("Transcript Search - Skipping duplicate transcript");
+      return [];
+    }
 
     // Extract keywords (splitting by space for simplicity)
     const keywords = storedText.split(" ")
@@ -89,6 +94,12 @@ export const fetchVideosWithDetails = async (): Promise<TranscriptSearchResult> 
     }
 
     console.log("Transcript Search: Using transcript:", storedText);
+    
+    // Check if this is a duplicate transcript we've already processed
+    if (!isNewTranscript(storedText)) {
+      console.log("Transcript Search - Skipping duplicate transcript");
+      return { videos: [], success: false, error: "Duplicate transcript - already processed" };
+    }
 
     // Extract keywords (splitting by space for simplicity)
     const keywords = storedText.split(" ")

@@ -1,3 +1,4 @@
+
 /**
  * Video Loading Manager
  * 
@@ -30,6 +31,12 @@ const activeLocks = new Map<string, number>();
 // Keep track of processed transcripts to avoid duplicates
 const processedTranscripts = new Set<string>();
 const transcriptProcessedTimestamps = new Map<string, number>();
+
+// Track video requests to prevent duplicates in queue
+const activeVideoRequests = new Set<string>();
+
+// Auto-release locks after timeout (milliseconds)
+const LOCK_TIMEOUT = 10000; // 10 seconds
 
 /**
  * Validate search keywords to prevent common issues
@@ -155,6 +162,15 @@ export const acquireVideoLoadingLock = (requestId: string): boolean => {
   console.log(`[VideoLoadingManager] Lock acquired for ${requestId}`);
   isProcessingRequest = true;
   activeLocks.set(requestId, Date.now());
+  
+  // Set automatic timeout to release lock in case of errors
+  setTimeout(() => {
+    if (activeLocks.has(requestId)) {
+      console.warn(`[VideoLoadingManager] Auto-releasing stale lock for ${requestId} after ${LOCK_TIMEOUT}ms`);
+      releaseVideoLoadingLock(requestId);
+    }
+  }, LOCK_TIMEOUT);
+  
   return true;
 };
 
@@ -172,18 +188,35 @@ export const releaseVideoLoadingLock = (requestId: string): void => {
 
 /**
  * Queue a video request for later processing
+ * Returns true if video was added, false if it was a duplicate
  */
-export const queueVideoRequest = (video: VideoRequest): void => {
+export const queueVideoRequest = (video: VideoRequest): boolean => {
+  // Create a unique key for this video to check for duplicates
+  const videoKey = `${video.id}-${video.url}`;
+  
+  // Check if this exact video is already in the activeVideoRequests set
+  if (activeVideoRequests.has(videoKey)) {
+    console.log(`[VideoLoadingManager] Ignoring duplicate video request: ${video.name}`);
+    return false;
+  }
+  
   console.log(`[VideoLoadingManager] Queuing video request: ${video.name}`);
   
   // Check if this video is already in the queue
-  const isDuplicate = pendingVideoRequests.some(v => v.id === video.id && v.url === video.url);
+  const isDuplicate = pendingVideoRequests.some(v => 
+    v.id === video.id && v.url === video.url
+  );
   
   if (!isDuplicate) {
+    // Add to the pending queue
     pendingVideoRequests.push(video);
+    // Add to active tracking set
+    activeVideoRequests.add(videoKey);
     console.log(`[VideoLoadingManager] Video queued: ${video.name}`);
+    return true;
   } else {
     console.log(`[VideoLoadingManager] Video already in queue: ${video.name}`);
+    return false;
   }
 };
 
@@ -201,6 +234,10 @@ export const processPendingRequests = (): void => {
   const nextVideo = pendingVideoRequests.shift();
   if (nextVideo) {
     console.log(`[VideoLoadingManager] Processing pending video request: ${nextVideo.name}`);
+    
+    // Remove from active tracking
+    const videoKey = `${nextVideo.id}-${nextVideo.url}`;
+    activeVideoRequests.delete(videoKey);
     
     // Dispatch custom event to process this video
     window.dispatchEvent(new CustomEvent('process_pending_video', {
@@ -224,6 +261,9 @@ export const resetVideoLoadingState = (): void => {
   isProcessingRequest = false;
   currentVideoUrl = null;
   activeLocks.clear();
+  
+  // Also clear the active video tracking
+  activeVideoRequests.clear();
 };
 
 /**
@@ -262,6 +302,35 @@ export const isNewTranscript = (transcript: string): boolean => {
 };
 
 /**
+ * Check if a specific video is already being processed
+ */
+export const isVideoAlreadyQueued = (videoId: number, videoUrl: string): boolean => {
+  const videoKey = `${videoId}-${videoUrl}`;
+  return activeVideoRequests.has(videoKey);
+};
+
+/**
+ * Clear all stale locks that have been held too long
+ */
+export const clearStaleLocks = (): void => {
+  const now = Date.now();
+  let staleLocksFound = false;
+  
+  activeLocks.forEach((timestamp, lockId) => {
+    const timeSinceAcquired = now - timestamp;
+    if (timeSinceAcquired > LOCK_TIMEOUT) {
+      console.warn(`[VideoLoadingManager] Clearing stale lock: ${lockId} (held for ${timeSinceAcquired}ms)`);
+      releaseVideoLoadingLock(lockId);
+      staleLocksFound = true;
+    }
+  });
+  
+  if (staleLocksFound) {
+    resetVideoLoadingState();
+  }
+};
+
+/**
  * Set the readiness state of the video element
  */
 export const setVideoElementReady = (isReady: boolean): void => {
@@ -280,6 +349,9 @@ export const isVideoElementReady = (): boolean => {
   return videoElementReady;
 };
 
+// Set up periodic check for stale locks
+setInterval(clearStaleLocks, LOCK_TIMEOUT);
+
 export default {
   validateSearchKeyword,
   requestVideoLoad,
@@ -294,5 +366,7 @@ export default {
   resetVideoLoadingState,
   isNewTranscript,
   setVideoElementReady,
-  isVideoElementReady
+  isVideoElementReady,
+  isVideoAlreadyQueued,
+  clearStaleLocks
 };

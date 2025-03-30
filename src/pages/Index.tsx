@@ -10,6 +10,7 @@ import TranscriptListener from '@/components/TranscriptListener';
 import NativeSpeechRecorder from '@/components/NativeSpeechRecorder';
 import SpeechToTextButton from '@/components/SpeechToTextButton';
 import { useToast } from '@/hooks/use-toast';
+import { resetVideoLoadingState, clearStaleLocks } from '@/utils/videoLoadingManager';
 
 interface VapiSDK {
   run: (config: {
@@ -93,6 +94,8 @@ const Index = () => {
   useEffect(() => {
     console.log("Index component mounted");
     addDebugLog("Component mounted - initializing voice assistant");
+    
+    resetVideoLoadingState();
     
     const assistant = "607959b0-89a1-482a-ad03-66a7c86327e1";
     const apiKey = "87657dc4-df36-4fa4-b292-0a60d40d43e4";
@@ -225,7 +228,6 @@ const Index = () => {
             console.log("Voice transcript:", input.transcript);
             addDebugLog(`Transcript content: "${input.transcript.substring(0, 50)}..."`);
             
-            // Ensure we properly dispatch the voice input event for the listener to capture
             window.dispatchEvent(new CustomEvent('voice_input', {
               detail: {
                 type: 'voice_input',
@@ -233,7 +235,6 @@ const Index = () => {
               }
             }));
             
-            // Save voice input to localStorage here for redundancy
             try {
               const savedInputs = JSON.parse(localStorage.getItem('voice_input_history') || '[]');
               const newVoiceInput = {
@@ -473,6 +474,7 @@ const Index = () => {
       if (document.body.contains(script)) {
         document.body.removeChild(script);
       }
+      resetVideoLoadingState();
     };
   }, [toast, isRecordingActive]);
 
