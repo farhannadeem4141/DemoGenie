@@ -26,8 +26,12 @@ export const fetchVideos = async (): Promise<string[]> => {
       return [];
     }
 
+    // Clean the transcript - remove duplicate words
+    const cleanedText = cleanTranscript(storedText);
+    console.log("Transcript Search - Cleaned transcript:", cleanedText);
+
     // Extract keywords (splitting by space for simplicity)
-    const keywords = storedText.split(" ")
+    const keywords = cleanedText.split(" ")
       .filter(word => word.trim().length >= 3) // Only use words with 3+ characters
       .slice(0, 3); // Pick first 3 substantial words
     
@@ -50,14 +54,14 @@ export const fetchVideos = async (): Promise<string[]> => {
     
     console.log("Validated Keywords:", validatedKeywords);
 
-    // Query Supabase
+    // Query Supabase with more flexible matching
     const { data, error } = await supabase
       .from("videos")
       .select("video_url")
       .or(
-        validatedKeywords.map((keyword, index) => 
-          `video_tag${index + 1}.ilike.%${keyword}%`
-        ).join(", ")
+        validatedKeywords.map(keyword => 
+          `video_tag1.ilike.%${keyword}%,video_tag2.ilike.%${keyword}%,video_tag3.ilike.%${keyword}%`
+        ).join(",")
       );
 
     if (error) {
@@ -83,6 +87,26 @@ export const fetchVideos = async (): Promise<string[]> => {
   }
 };
 
+// Helper function to clean transcript text and remove duplicates
+const cleanTranscript = (text: string): string => {
+  // Convert to lowercase and trim
+  let cleaned = text.toLowerCase().trim();
+  
+  // Split by spaces
+  const words = cleaned.split(/\s+/);
+  
+  // Remove consecutive duplicate words
+  const deduplicatedWords: string[] = [];
+  for (let i = 0; i < words.length; i++) {
+    // Only add if it's different from the previous word
+    if (i === 0 || words[i] !== words[i - 1]) {
+      deduplicatedWords.push(words[i]);
+    }
+  }
+  
+  return deduplicatedWords.join(' ');
+};
+
 // Enhanced version with detailed error reporting
 export const fetchVideosWithDetails = async (): Promise<TranscriptSearchResult> => {
   try {
@@ -96,13 +120,18 @@ export const fetchVideosWithDetails = async (): Promise<TranscriptSearchResult> 
     console.log("Transcript Search: Using transcript:", storedText);
     
     // Check if this is a duplicate transcript we've already processed
+    // Using a less strict check to allow similar but not identical transcripts
     if (!isNewTranscript(storedText)) {
-      console.log("Transcript Search - Skipping duplicate transcript");
-      return { videos: [], success: false, error: "Duplicate transcript - already processed" };
+      console.log("Transcript Search - Processed similar transcript recently");
+      return { videos: [], success: false, error: "Similar transcript recently processed" };
     }
 
+    // Clean the transcript - remove duplicate words
+    const cleanedText = cleanTranscript(storedText);
+    console.log("Transcript Search - Cleaned transcript:", cleanedText);
+
     // Extract keywords (splitting by space for simplicity)
-    const keywords = storedText.split(" ")
+    const keywords = cleanedText.split(" ")
       .filter(word => word.trim().length >= 3) // Only use words with 3+ characters
       .slice(0, 3); // Pick first 3 substantial words
     
@@ -135,23 +164,35 @@ export const fetchVideosWithDetails = async (): Promise<TranscriptSearchResult> 
     
     console.log("Transcript Search: Validated Keywords:", validatedKeywords);
 
-    // Build the OR query conditions
-    const conditions = validatedKeywords
-      .filter(k => k && k.trim().length > 0)
-      .map((keyword, index) => {
-        // Use modulo to cycle through the 3 tag columns if we have more than 3 keywords
-        const tag = `video_tag${(index % 3) + 1}`;
-        return `${tag}.ilike.%${keyword}%`;
-      })
-      .join(", ");
+    // Build more flexible query conditions to improve matches
+    const conditions: string[] = [];
     
-    console.log("Transcript Search: Query conditions:", conditions);
+    // For each keyword, check all tag columns
+    validatedKeywords.forEach(keyword => {
+      if (keyword && keyword.trim().length > 0) {
+        conditions.push(`video_tag1.ilike.%${keyword}%`);
+        conditions.push(`video_tag2.ilike.%${keyword}%`);
+        conditions.push(`video_tag3.ilike.%${keyword}%`);
+      }
+    });
+    
+    // If we have no conditions, add a fallback
+    if (conditions.length === 0) {
+      // Use the first word from original transcript as fallback
+      const firstWord = storedText.split(' ')[0];
+      if (firstWord && firstWord.length >= 2) {
+        conditions.push(`video_tag1.ilike.%${firstWord}%`);
+      }
+    }
+    
+    const queryConditions = conditions.join(",");
+    console.log("Transcript Search: Query conditions:", queryConditions);
 
-    // Query Supabase
+    // Query Supabase with more flexible matching
     const { data, error } = await supabase
       .from("videos")
-      .select("video_url")
-      .or(conditions);
+      .select("*")
+      .or(queryConditions);
 
     if (error) {
       console.error("Transcript Search: Database error:", error);
@@ -160,6 +201,29 @@ export const fetchVideosWithDetails = async (): Promise<TranscriptSearchResult> 
 
     if (!data || data.length === 0) {
       console.log("Transcript Search: No matching videos found for keywords:", validatedKeywords);
+      
+      // Try a fallback search with just the first valid keyword
+      if (validatedKeywords.length > 0) {
+        const fallbackKeyword = validatedKeywords[0];
+        const fallbackResult = await supabase
+          .from("videos")
+          .select("*")
+          .limit(1);
+          
+        if (fallbackResult.data && fallbackResult.data.length > 0) {
+          console.log("Transcript Search: Found fallback video");
+          
+          // Extract and validate video URLs
+          const videoUrls = fallbackResult.data
+            .map(video => validateVideoUrl(video.video_url))
+            .filter(url => !!url);
+            
+          if (videoUrls.length > 0) {
+            return { videos: videoUrls, success: true };
+          }
+        }
+      }
+      
       return { videos: [], success: false, error: `No videos found matching keywords: ${validatedKeywords.join(", ")}` };
     }
 

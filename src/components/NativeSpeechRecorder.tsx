@@ -29,11 +29,34 @@ const NativeSpeechRecorder: React.FC<NativeSpeechRecorderProps> = () => {
   const { toast } = useToast();
   const isTrackingVapiButton = useRef(false);
   const lastTranscriptRef = useRef('');
+  const transcriptDebounceTimer = useRef<NodeJS.Timeout | null>(null);
   
   // Update ref when transcript changes
   useEffect(() => {
     lastTranscriptRef.current = transcript;
   }, [transcript]);
+  
+  // Clean transcript by removing duplicate words
+  const cleanTranscript = (text: string): string => {
+    if (!text) return '';
+    
+    // Convert to lowercase and trim
+    let cleaned = text.toLowerCase().trim();
+    
+    // Split by spaces
+    const words = cleaned.split(/\s+/);
+    
+    // Remove consecutive duplicate words
+    const deduplicatedWords: string[] = [];
+    for (let i = 0; i < words.length; i++) {
+      // Only add if it's different from the previous word
+      if (i === 0 || words[i] !== words[i - 1]) {
+        deduplicatedWords.push(words[i]);
+      }
+    }
+    
+    return deduplicatedWords.join(' ');
+  };
   
   const setupVapiButtonListener = useCallback(() => {
     if (isTrackingVapiButton.current) return;
@@ -178,63 +201,77 @@ const NativeSpeechRecorder: React.FC<NativeSpeechRecorderProps> = () => {
     }
   }, [error, toast]);
   
-  // Save transcript when it changes
+  // Save transcript when it changes with debounce to avoid multiple saves
   useEffect(() => {
     if (transcript && transcript.trim() && transcript !== lastTranscriptRef.current) {
       console.log("[NativeSpeech] New transcript detected:", transcript);
       
-      // Save to localStorage directly here for redundancy
-      try {
-        console.log("[NativeSpeech] Saving transcript to localStorage...");
-        
-        // Using the constant to ensure consistency
-        const nativeInputsStr = localStorage.getItem(NATIVE_VOICE_INPUT_KEY);
-        const savedInputs = nativeInputsStr ? JSON.parse(nativeInputsStr) : [];
-        
-        if (!Array.isArray(savedInputs)) {
-          console.error('[NativeSpeech] Existing input history is not an array, resetting');
-          localStorage.setItem(NATIVE_VOICE_INPUT_KEY, '[]');
-        }
-        
-        const newInput = {
-          text: transcript,
-          timestamp: Date.now(),
-          source: 'native'
-        };
-        
-        // Save to native voice input history key
-        localStorage.setItem(
-          NATIVE_VOICE_INPUT_KEY,
-          JSON.stringify([newInput, ...(Array.isArray(savedInputs) ? savedInputs : [])].slice(0, 50))
-        );
-        
-        // Also save to the standard voice_input_history for compatibility
-        const standardInputsStr = localStorage.getItem(VOICE_INPUT_KEY);
-        const standardInputs = standardInputsStr ? JSON.parse(standardInputsStr) : [];
-        
-        if (!Array.isArray(standardInputs)) {
-          console.error('[NativeSpeech] Existing standard input history is not an array, resetting');
-          localStorage.setItem(VOICE_INPUT_KEY, '[]');
-        }
-        
-        localStorage.setItem(
-          VOICE_INPUT_KEY,
-          JSON.stringify([newInput, ...(Array.isArray(standardInputs) ? standardInputs : [])].slice(0, 50))
-        );
-        
-        console.log("[NativeSpeech] Successfully saved transcript to localStorage:", transcript);
-        console.log("[NativeSpeech] Keys in localStorage:", Object.keys(localStorage));
-        
-        // Dispatch custom event for the system to capture
-        window.dispatchEvent(new CustomEvent('voice_input', {
-          detail: {
-            type: 'voice_input',
-            text: transcript
-          }
-        }));
-      } catch (e) {
-        console.error('[NativeSpeech] Error saving transcript to localStorage:', e);
+      // Clear previous timer if it exists
+      if (transcriptDebounceTimer.current) {
+        clearTimeout(transcriptDebounceTimer.current);
       }
+      
+      // Set a new timer for debouncing
+      transcriptDebounceTimer.current = setTimeout(() => {
+        const cleanedTranscript = cleanTranscript(transcript);
+        console.log("[NativeSpeech] Saving cleaned transcript:", cleanedTranscript);
+        
+        // Save to localStorage directly here for redundancy
+        try {
+          console.log("[NativeSpeech] Saving transcript to localStorage...");
+          
+          // Save clean transcript for immediate video search
+          localStorage.setItem('transcript', cleanedTranscript);
+          
+          // Using the constant to ensure consistency
+          const nativeInputsStr = localStorage.getItem(NATIVE_VOICE_INPUT_KEY);
+          const savedInputs = nativeInputsStr ? JSON.parse(nativeInputsStr) : [];
+          
+          if (!Array.isArray(savedInputs)) {
+            console.error('[NativeSpeech] Existing input history is not an array, resetting');
+            localStorage.setItem(NATIVE_VOICE_INPUT_KEY, '[]');
+          }
+          
+          const newInput = {
+            text: cleanedTranscript,
+            timestamp: Date.now(),
+            source: 'native'
+          };
+          
+          // Save to native voice input history key
+          localStorage.setItem(
+            NATIVE_VOICE_INPUT_KEY,
+            JSON.stringify([newInput, ...(Array.isArray(savedInputs) ? savedInputs : [])].slice(0, 50))
+          );
+          
+          // Also save to the standard voice_input_history for compatibility
+          const standardInputsStr = localStorage.getItem(VOICE_INPUT_KEY);
+          const standardInputs = standardInputsStr ? JSON.parse(standardInputsStr) : [];
+          
+          if (!Array.isArray(standardInputs)) {
+            console.error('[NativeSpeech] Existing standard input history is not an array, resetting');
+            localStorage.setItem(VOICE_INPUT_KEY, '[]');
+          }
+          
+          localStorage.setItem(
+            VOICE_INPUT_KEY,
+            JSON.stringify([newInput, ...(Array.isArray(standardInputs) ? standardInputs : [])].slice(0, 50))
+          );
+          
+          console.log("[NativeSpeech] Successfully saved transcript to localStorage:", cleanedTranscript);
+          console.log("[NativeSpeech] Keys in localStorage:", Object.keys(localStorage));
+          
+          // Dispatch custom event for the system to capture
+          window.dispatchEvent(new CustomEvent('voice_input', {
+            detail: {
+              type: 'voice_input',
+              text: cleanedTranscript
+            }
+          }));
+        } catch (e) {
+          console.error('[NativeSpeech] Error saving transcript to localStorage:', e);
+        }
+      }, 800); // Debounce for 800ms to ensure we get the complete transcript
     }
   }, [transcript]);
   

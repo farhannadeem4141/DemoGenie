@@ -1,4 +1,3 @@
-
 /**
  * Video Loading Manager
  * 
@@ -36,7 +35,7 @@ const transcriptProcessedTimestamps = new Map<string, number>();
 const activeVideoRequests = new Set<string>();
 
 // Auto-release locks after timeout (milliseconds)
-const LOCK_TIMEOUT = 10000; // 10 seconds
+const LOCK_TIMEOUT = 8000; // 8 seconds
 
 /**
  * Validate search keywords to prevent common issues
@@ -168,6 +167,9 @@ export const acquireVideoLoadingLock = (requestId: string): boolean => {
     if (activeLocks.has(requestId)) {
       console.warn(`[VideoLoadingManager] Auto-releasing stale lock for ${requestId} after ${LOCK_TIMEOUT}ms`);
       releaseVideoLoadingLock(requestId);
+      
+      // Clear waiting queue
+      clearStaleVideoRequests();
     }
   }, LOCK_TIMEOUT);
   
@@ -208,8 +210,20 @@ export const queueVideoRequest = (video: VideoRequest): boolean => {
   );
   
   if (!isDuplicate) {
+    // Ensure queue doesn't get too large
+    if (pendingVideoRequests.length >= 5) {
+      console.log(`[VideoLoadingManager] Queue too large, removing oldest request`);
+      pendingVideoRequests.pop(); // Remove the oldest request
+      
+      // Also clean out stale tracking entries if the queue is getting large
+      if (activeVideoRequests.size > 10) {
+        clearStaleVideoRequests();
+      }
+    }
+    
     // Add to the pending queue
     pendingVideoRequests.push(video);
+    
     // Add to active tracking set
     activeVideoRequests.add(videoKey);
     console.log(`[VideoLoadingManager] Video queued: ${video.name}`);
@@ -224,7 +238,10 @@ export const queueVideoRequest = (video: VideoRequest): boolean => {
  * Process any pending video requests
  */
 export const processPendingRequests = (): void => {
-  if (pendingVideoRequests.length === 0) return;
+  if (pendingVideoRequests.length === 0) {
+    console.log(`[VideoLoadingManager] No pending requests to process`);
+    return;
+  }
   
   if (isProcessingRequest) {
     console.log(`[VideoLoadingManager] Cannot process pending requests - already processing`);
@@ -267,24 +284,84 @@ export const resetVideoLoadingState = (): void => {
 };
 
 /**
+ * Clean out stale video requests from tracking
+ */
+export const clearStaleVideoRequests = (): void => {
+  console.log(`[VideoLoadingManager] Clearing stale video requests. Before: ${activeVideoRequests.size}`);
+  
+  // Clear all tracking - this is a reset
+  activeVideoRequests.clear();
+  
+  // Keep only the most recent pending request
+  if (pendingVideoRequests.length > 1) {
+    const latestRequest = pendingVideoRequests[0];
+    pendingVideoRequests.length = 0;
+    pendingVideoRequests.push(latestRequest);
+    
+    // Re-add the latest request to tracking
+    const videoKey = `${latestRequest.id}-${latestRequest.url}`;
+    activeVideoRequests.add(videoKey);
+    
+    console.log(`[VideoLoadingManager] Cleared queue, kept only the latest request: ${latestRequest.name}`);
+  }
+};
+
+/**
  * Check if a transcript is new and hasn't been processed recently
+ * More lenient version that allows similar transcripts after a time delay
  */
 export const isNewTranscript = (transcript: string): boolean => {
   if (!transcript) return false;
   
-  // Clean and normalize the transcript
-  const normalizedTranscript = transcript.toLowerCase().trim();
+  // Clean and normalize the transcript - remove duplicate words
+  const normalizedTranscript = cleanTranscript(transcript);
   
   // Check if we've seen this exact transcript before
   if (processedTranscripts.has(normalizedTranscript)) {
     const lastProcessedTime = transcriptProcessedTimestamps.get(normalizedTranscript) || 0;
     const timeSince = Date.now() - lastProcessedTime;
     
-    // Don't process the same transcript if it was processed in the last 5 seconds
-    if (timeSince < 5000) {
+    // Don't process the same transcript if it was processed in the last 3 seconds
+    if (timeSince < 3000) {
       console.log(`[VideoLoadingManager] Transcript already processed recently: "${normalizedTranscript.substring(0, 30)}..."`);
       return false;
     }
+  }
+  
+  // Check for "similar" transcripts - check if any word in this transcript is in any processed transcript
+  let similarityFound = false;
+  const transcriptWords = new Set(normalizedTranscript.split(' ').filter(w => w.length > 3));
+  
+  if (transcriptWords.size > 0) {
+    for (const processedTranscript of processedTranscripts) {
+      const processedTime = transcriptProcessedTimestamps.get(processedTranscript) || 0;
+      const timeSince = Date.now() - processedTime;
+      
+      // Only check similarity for recently processed transcripts (last 5 seconds)
+      if (timeSince < 5000) {
+        const processedWords = new Set(processedTranscript.split(' ').filter(w => w.length > 3));
+        
+        // Check overlap between word sets
+        let matchCount = 0;
+        for (const word of transcriptWords) {
+          if (processedWords.has(word)) {
+            matchCount++;
+          }
+        }
+        
+        // If more than 60% of the words match and it was processed recently, consider it similar
+        const similarityScore = matchCount / Math.min(transcriptWords.size, processedWords.size);
+        if (similarityScore > 0.6) {
+          console.log(`[VideoLoadingManager] Found similar transcript with ${Math.round(similarityScore * 100)}% match`);
+          similarityFound = true;
+          break;
+        }
+      }
+    }
+  }
+  
+  if (similarityFound) {
+    return false;
   }
   
   // Add to processed set with timestamp
@@ -292,14 +369,56 @@ export const isNewTranscript = (transcript: string): boolean => {
   transcriptProcessedTimestamps.set(normalizedTranscript, Date.now());
   
   // Keep the processed transcript set from growing too large
-  if (processedTranscripts.size > 50) {
-    const oldestTranscript = Array.from(processedTranscripts)[0];
-    processedTranscripts.delete(oldestTranscript);
-    transcriptProcessedTimestamps.delete(oldestTranscript);
+  if (processedTranscripts.size > 10) {
+    const oldestEntry = getOldestEntry(transcriptProcessedTimestamps);
+    if (oldestEntry) {
+      processedTranscripts.delete(oldestEntry);
+      transcriptProcessedTimestamps.delete(oldestEntry);
+    }
   }
   
+  console.log(`[VideoLoadingManager] New transcript accepted: "${normalizedTranscript.substring(0, 30)}..."`);
   return true;
 };
+
+/**
+ * Helper function to clean transcript text and remove duplicates
+ */
+const cleanTranscript = (text: string): string => {
+  // Convert to lowercase and trim
+  let cleaned = text.toLowerCase().trim();
+  
+  // Split by spaces
+  const words = cleaned.split(/\s+/);
+  
+  // Remove consecutive duplicate words
+  const deduplicatedWords: string[] = [];
+  for (let i = 0; i < words.length; i++) {
+    // Only add if it's different from the previous word
+    if (i === 0 || words[i] !== words[i - 1]) {
+      deduplicatedWords.push(words[i]);
+    }
+  }
+  
+  return deduplicatedWords.join(' ');
+};
+
+/**
+ * Helper to get the oldest timestamp entry from a map
+ */
+function getOldestEntry(map: Map<string, number>): string | null {
+  let oldestTime = Infinity;
+  let oldestKey: string | null = null;
+  
+  map.forEach((timestamp, key) => {
+    if (timestamp < oldestTime) {
+      oldestTime = timestamp;
+      oldestKey = key;
+    }
+  });
+  
+  return oldestKey;
+}
 
 /**
  * Check if a specific video is already being processed
@@ -351,6 +470,8 @@ export const isVideoElementReady = (): boolean => {
 
 // Set up periodic check for stale locks
 setInterval(clearStaleLocks, LOCK_TIMEOUT);
+// Set up periodic check for stale video requests
+setInterval(clearStaleVideoRequests, LOCK_TIMEOUT * 2);
 
 export default {
   validateSearchKeyword,
@@ -368,5 +489,6 @@ export default {
   setVideoElementReady,
   isVideoElementReady,
   isVideoAlreadyQueued,
-  clearStaleLocks
+  clearStaleLocks,
+  clearStaleVideoRequests
 };

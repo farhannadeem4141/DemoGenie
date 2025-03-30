@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -23,6 +22,28 @@ interface UseSpeechRecognitionReturn {
 const NATIVE_VOICE_INPUT_KEY = 'native_voice_input_history';
 const VOICE_INPUT_KEY = 'voice_input_history';
 
+// Clean transcript by removing duplicate words
+const cleanTranscript = (text: string): string => {
+  if (!text) return '';
+  
+  // Convert to lowercase and trim
+  let cleaned = text.toLowerCase().trim();
+  
+  // Split by spaces
+  const words = cleaned.split(/\s+/);
+  
+  // Remove consecutive duplicate words
+  const deduplicatedWords: string[] = [];
+  for (let i = 0; i < words.length; i++) {
+    // Only add if it's different from the previous word
+    if (i === 0 || words[i] !== words[i - 1]) {
+      deduplicatedWords.push(words[i]);
+    }
+  }
+  
+  return deduplicatedWords.join(' ');
+};
+
 const useSpeechRecognition = (options: SpeechRecognitionOptions = {}): UseSpeechRecognitionReturn => {
   const { toast } = useToast();
   const [isListening, setIsListening] = useState(false);
@@ -30,6 +51,8 @@ const useSpeechRecognition = (options: SpeechRecognitionOptions = {}): UseSpeech
   const [error, setError] = useState<string | null>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const isRecognitionSupported = useRef<boolean>(false);
+  const lastSavedTranscriptRef = useRef<string>('');
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Check if speech recognition is supported
   useEffect(() => {
@@ -58,10 +81,20 @@ const useSpeechRecognition = (options: SpeechRecognitionOptions = {}): UseSpeech
     if (!text.trim()) return;
     
     try {
-      console.log('[useSpeechRecognition] Saving transcript to localStorage:', text);
+      // Clean the transcript before saving
+      const cleanedText = cleanTranscript(text);
+      
+      // Don't save if it's the same as the last saved transcript
+      if (cleanedText === lastSavedTranscriptRef.current) {
+        console.log('[useSpeechRecognition] Skipping duplicate transcript:', cleanedText);
+        return;
+      }
+      
+      lastSavedTranscriptRef.current = cleanedText;
+      console.log('[useSpeechRecognition] Saving cleaned transcript to localStorage:', cleanedText);
       
       // First, save to transcript key for immediate video search
-      localStorage.setItem('transcript', text);
+      localStorage.setItem('transcript', cleanedText);
       
       // Save to native_voice_input_history
       const nativeInputsStr = localStorage.getItem(NATIVE_VOICE_INPUT_KEY);
@@ -78,7 +111,7 @@ const useSpeechRecognition = (options: SpeechRecognitionOptions = {}): UseSpeech
       }
       
       const newInput = {
-        text,
+        text: cleanedText,
         timestamp: Date.now(),
         source: 'native' // Mark this as coming from the native API, not Vapi
       };
@@ -107,14 +140,13 @@ const useSpeechRecognition = (options: SpeechRecognitionOptions = {}): UseSpeech
         JSON.stringify([newInput, ...standardInputs].slice(0, 50))
       );
       
-      console.log("[useSpeechRecognition] Successfully saved voice input to localStorage:", text);
-      console.log("[useSpeechRecognition] Current localStorage keys:", Object.keys(localStorage));
+      console.log("[useSpeechRecognition] Successfully saved voice input to localStorage:", cleanedText);
       
       // Dispatch custom event for the system to capture
       window.dispatchEvent(new CustomEvent('voice_input', {
         detail: {
           type: 'voice_input',
-          text: text
+          text: cleanedText
         }
       }));
     } catch (e) {
@@ -265,6 +297,11 @@ const useSpeechRecognition = (options: SpeechRecognitionOptions = {}): UseSpeech
       recognitionRef.current.stop();
       setIsListening(false);
       
+      // Cancel any pending debounce timer
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+      
       // One last save on manual stop
       if (transcript.trim()) {
         console.log("[useSpeechRecognition] Saving transcript on manual stop:", transcript);
@@ -281,6 +318,7 @@ const useSpeechRecognition = (options: SpeechRecognitionOptions = {}): UseSpeech
 
   const resetTranscript = useCallback(() => {
     setTranscript('');
+    lastSavedTranscriptRef.current = '';
   }, []);
 
   // Clean up on unmount
@@ -288,6 +326,9 @@ const useSpeechRecognition = (options: SpeechRecognitionOptions = {}): UseSpeech
     return () => {
       if (recognitionRef.current) {
         recognitionRef.current.abort();
+      }
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
       }
     };
   }, []);
