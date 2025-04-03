@@ -34,9 +34,7 @@ const CTA: React.FC = () => {
               >
                 Talk to Us <MessageCircle className="ml-2 h-5 w-5" />
               </Button>
-            </div>
-            
-            <div className="mt-[100px]">
+              
               <Button 
                 variant="outline" 
                 size="lg"
