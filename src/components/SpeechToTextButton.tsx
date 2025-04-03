@@ -1,8 +1,9 @@
 
 import React, { useState } from 'react';
-import { Phone } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import useSpeechRecognition from '@/hooks/useSpeechRecognition';
+import { Button } from './ui/button';
 
 const SpeechToTextButton = () => {
   const [isRecording, setIsRecording] = useState(false);
@@ -117,16 +118,18 @@ const SpeechToTextButton = () => {
   }, [error, toast]);
 
   return (
-    <div className="fixed left-1/2 transform -translate-x-1/2" style={{ top: '300px' }}>
-      <button
+    <div className="inline-block">
+      <Button
         onClick={toggleRecording}
-        className={`flex items-center justify-center gap-2 px-6 py-3 rounded-full shadow-lg transition-all ${
-          isRecording ? 'bg-red-500 hover:bg-red-600' : 'bg-blue-500 hover:bg-blue-600'
-        } text-white font-medium`}
+        variant={isRecording ? "destructive" : "default"}
+        size="lg"
+        className={`flex items-center justify-center gap-2 ${
+          isRecording ? 'bg-red-500 hover:bg-red-600' : 'bg-whatsapp hover:bg-whatsapp-dark text-white'
+        }`}
       >
-        <Phone className="h-5 w-5" />
-        {isRecording ? "Stop Recording" : "Start Recording"}
-      </button>
+        {isRecording ? "Stop Demo" : "Try Demo"}
+        {!isRecording && <ArrowRight className="h-5 w-5" />}
+      </Button>
       
       {isRecording && (
         <div className="mt-3 text-center text-sm text-gray-600 animate-pulse">
