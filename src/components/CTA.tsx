@@ -62,9 +62,9 @@ const CTA: React.FC = () => {
               </div>
             </div>
             <img
-              src="https://images.unsplash.com/photo-1551650992-ee4fd47df41f?auto=format&fit=crop&w=800&q=80"
-              alt="Disabled businesswoman in wheelchair talking on mobile phone with colleagues"
-              className="rounded-lg shadow-xl max-w-full h-auto object-cover mt-4 opacity-0 animate-fade-up"
+              src="https://img.freepik.com/free-vector/flat-design-illustration-customer-support_23-2148887720.jpg"
+              alt="Illustration of people communicating through WhatsApp"
+              className="rounded-lg shadow-xl max-w-full h-auto object-cover mt-4 opacity-0 animate-fade-up w-full md:max-h-[400px]"
               style={{ animationDelay: "200ms" }}
             />
           </div>
