@@ -13,7 +13,7 @@ const CTA: React.FC = () => {
   };
 
   return (
-    <div className="min-h-[85vh] flex flex-col items-center justify-center px-4 relative overflow-hidden">
+    <div className="min-h-[80vh] flex flex-col items-center justify-center px-4 relative overflow-hidden">
       <div className="max-w-6xl w-full flex flex-col md:flex-row items-center justify-between gap-8">
         <div className="w-full md:w-1/2">
           <div className="text-left opacity-0 animate-fade-up">
@@ -34,6 +34,9 @@ const CTA: React.FC = () => {
               >
                 Talk to Us <MessageCircle className="ml-2 h-5 w-5" />
               </Button>
+            </div>
+            
+            <div className="mt-[100px]">
               <Button 
                 variant="outline" 
                 size="lg"
@@ -59,8 +62,8 @@ const CTA: React.FC = () => {
               </div>
             </div>
             <img
-              src="https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?auto=format&fit=crop&w=800&q=80"
-              alt="People talking on WhatsApp Business"
+              src="https://images.unsplash.com/photo-1551650992-ee4fd47df41f?auto=format&fit=crop&w=800&q=80"
+              alt="Disabled businesswoman in wheelchair talking on mobile phone with colleagues"
               className="rounded-lg shadow-xl max-w-full h-auto object-cover mt-4 opacity-0 animate-fade-up"
               style={{ animationDelay: "200ms" }}
             />
