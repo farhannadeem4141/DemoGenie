@@ -1,8 +1,9 @@
 
 import React from 'react';
 import { Button } from '@/components/ui/button';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, MessageCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import SpeechToTextButton from './SpeechToTextButton';
 
 const CTA: React.FC = () => {
   const activateDemo = () => {
@@ -26,8 +27,12 @@ const CTA: React.FC = () => {
               📢 Turn conversations into conversions! Automate replies, send promotions, and grow your business—right from WhatsApp.
             </p>
             <div className="flex flex-wrap gap-4 mt-6">
-              <Button size="lg" className="bg-whatsapp hover:bg-whatsapp-dark text-white">
-                Get Started <ArrowRight className="ml-2 h-5 w-5" />
+              <Button 
+                size="lg" 
+                className="bg-whatsapp hover:bg-whatsapp-dark text-white"
+                onClick={activateDemo}
+              >
+                Talk to Us <MessageCircle className="ml-2 h-5 w-5" />
               </Button>
               <Button 
                 variant="outline" 
@@ -54,8 +59,8 @@ const CTA: React.FC = () => {
               </div>
             </div>
             <img
-              src="https://images.unsplash.com/photo-1488590528505-98d2b5aba04b?auto=format&fit=crop&w=800&q=80"
-              alt="WhatsApp Business Platform"
+              src="https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?auto=format&fit=crop&w=800&q=80"
+              alt="People talking on WhatsApp Business"
               className="rounded-lg shadow-xl max-w-full h-auto object-cover mt-4 opacity-0 animate-fade-up"
               style={{ animationDelay: "200ms" }}
             />
