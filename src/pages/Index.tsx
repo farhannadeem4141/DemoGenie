@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useState } from 'react';
 import Header from '@/components/Header';
 import CTA from '@/components/CTA';
@@ -10,6 +11,7 @@ import TranscriptListener from '@/components/TranscriptListener';
 import NativeSpeechRecorder from '@/components/NativeSpeechRecorder';
 import { useToast } from '@/hooks/use-toast';
 import { resetVideoLoadingState, clearStaleLocks } from '@/utils/videoLoadingManager';
+import VapiButtonManager from '@/utils/vapiButtonManager';
 
 interface VapiSDK {
   run: (config: {
@@ -41,6 +43,8 @@ const Index = () => {
   const hasShownWelcomeMessage = useRef(false);
   const [isRecordingActive, setIsRecordingActive] = useState(false);
   const buttonRef = useRef<HTMLDivElement | null>(null);
+  const buttonManagerRef = useRef<VapiButtonManager | null>(null);
+  const isInitializedRef = useRef(false);
 
   const addDebugLog = (message: string) => {
     console.log(`[DEBUG] ${message}`);
@@ -90,6 +94,41 @@ const Index = () => {
     window.activateRecording = activateRecording;
   }, []);
 
+  // Set up button state manager to handle recording state
+  useEffect(() => {
+    // Skip if already initialized
+    if (isInitializedRef.current) return;
+    
+    addDebugLog("Initializing button manager");
+    buttonManagerRef.current = VapiButtonManager.getInstance();
+    
+    // Handle button state changes
+    buttonManagerRef.current.onStateChange((state) => {
+      const shouldBeActive = buttonManagerRef.current?.shouldRecordingBeActive();
+      addDebugLog(`Button state changed. Should recording be active: ${shouldBeActive}`);
+      
+      if (shouldBeActive && !isRecordingActive) {
+        activateRecording();
+      } else if (!shouldBeActive && isRecordingActive) {
+        addDebugLog("Deactivating recording due to button state: " + 
+                   `isVisible=${state.isVisible}, isIdle=${state.isIdle}`);
+        deactivateRecording();
+      }
+    });
+    
+    // Start monitoring
+    buttonManagerRef.current.startMonitoring();
+    
+    isInitializedRef.current = true;
+    
+    // Clean up on unmount
+    return () => {
+      if (buttonManagerRef.current) {
+        buttonManagerRef.current.stopMonitoring();
+      }
+    };
+  }, [isRecordingActive]);
+
   useEffect(() => {
     console.log("Index component mounted");
     addDebugLog("Component mounted - initializing voice assistant");
@@ -121,74 +160,15 @@ const Index = () => {
     script.async = true;
     document.body.appendChild(script);
 
-    const vapiButtonStateInterval = setInterval(() => {
-      const vapiSupportBtn = document.querySelector('[id^="vapi-support-btn"]');
-      
-      if (vapiSupportBtn) {
-        if (vapiSupportBtn instanceof HTMLElement) {
-          const isHidden = vapiSupportBtn.style.display === 'none' || 
-                          vapiSupportBtn.style.visibility === 'hidden' || 
-                          vapiSupportBtn.classList.contains('inactive') ||
-                          vapiSupportBtn.getAttribute('aria-hidden') === 'true';
-          
-          const hasIdleClass = vapiSupportBtn.classList.contains('vapi-btn-is-idle') || 
-                              vapiSupportBtn.classList.contains('idle') ||
-                              vapiSupportBtn.classList.contains('inactive');
-          
-          if (hasIdleClass && isRecordingActive) {
-            addDebugLog("Vapi button has idle class, deactivating recording");
-          }
-          
-          if ((isHidden || hasIdleClass) && isRecordingActive) {
-            addDebugLog("Vapi button detected as inactive or idle, deactivating recording");
-            deactivateRecording();
-          }
-        }
-      }
-      
-      const vapiIdleButtons = document.querySelectorAll('.vapi-btn-is-idle');
-      if (vapiIdleButtons.length > 0 && isRecordingActive) {
-        addDebugLog("Found elements with vapi-btn-is-idle class, deactivating recording");
-        deactivateRecording();
-      }
-    }, 1000);
+    // Periodically clear stale locks for system health
+    const staleLockCleanupInterval = setInterval(() => {
+      clearStaleLocks();
+    }, 60000); // Every minute
 
     script.onload = function () {
       addDebugLog("Vapi script loaded");
       if (window.vapiSDK) {
         addDebugLog("Vapi SDK detected");
-        
-        const buttonClassObserver = new MutationObserver((mutations) => {
-          mutations.forEach(mutation => {
-            if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
-              const target = mutation.target as HTMLElement;
-              const hasIdleClass = target.classList.contains('vapi-btn-is-idle') || 
-                                  target.classList.contains('idle') ||
-                                  target.classList.contains('inactive');
-              
-              if (hasIdleClass && isRecordingActive) {
-                addDebugLog("Vapi button class changed to idle state, deactivating recording");
-                deactivateRecording();
-              }
-            }
-          });
-        });
-        
-        const observeVapiButton = () => {
-          const vapiButtons = document.querySelectorAll('[id^="vapi-support-btn"]');
-          vapiButtons.forEach(button => {
-            buttonClassObserver.observe(button, { attributes: true, attributeFilter: ['class'] });
-            addDebugLog("Started observing Vapi button class changes");
-          });
-        };
-        
-        const buttonObserverInterval = setInterval(() => {
-          const vapiButtons = document.querySelectorAll('[id^="vapi-support-btn"]');
-          if (vapiButtons.length > 0) {
-            observeVapiButton();
-            clearInterval(buttonObserverInterval);
-          }
-        }, 1000);
         
         const handleMessage = (message: any) => {
           console.log("Message from Vapi:", message);
@@ -297,120 +277,6 @@ const Index = () => {
           }
         };
 
-        document.addEventListener('click', (e) => {
-          const target = e.target as HTMLElement;
-          
-          if (target && target.closest('[id^="vapi-support-btn"]')) {
-            addDebugLog("Vapi support button clicked directly!");
-            activateRecording();
-            
-            if (vapiInstanceRef.current && vapiInstanceRef.current.connect) {
-              try {
-                addDebugLog("Directly connecting vapiInstance after button click");
-                vapiInstanceRef.current.connect();
-              } catch (e) {
-                addDebugLog(`Error connecting vapiInstance: ${e}`);
-              }
-            }
-          }
-        }, true);
-
-        document.addEventListener('click', (e) => {
-          const target = e.target as HTMLElement;
-          
-          if (target && 
-              (target.classList.contains('vapi-close-btn') || 
-               target.classList.contains('vapi-overlay') ||
-               target.getAttribute('aria-label') === 'Close' ||
-               target.closest('[aria-label="Close"]'))) {
-            addDebugLog("Vapi UI close action detected!");
-            deactivateRecording();
-          }
-        }, true);
-
-        const setupVapiButtonClickListener = () => {
-          const observer = new MutationObserver((mutations) => {
-            for (const mutation of mutations) {
-              if (mutation.type === 'childList') {
-                const addedNodes = Array.from(mutation.addedNodes);
-                for (const node of addedNodes) {
-                  if (node instanceof HTMLElement) {
-                    const vapiButton = node.querySelector('[id^="vapi-support-btn"]');
-                    if (vapiButton) {
-                      addDebugLog("Found Vapi support button by ID, attaching click handler");
-                      buttonRef.current = vapiButton as HTMLDivElement;
-                      
-                      vapiButton.addEventListener('click', () => {
-                        addDebugLog("Vapi support button clicked via observer!");
-                        activateRecording();
-                        
-                        if (vapiInstanceRef.current && vapiInstanceRef.current.connect) {
-                          try {
-                            addDebugLog("Connecting vapiInstance after button click");
-                            vapiInstanceRef.current.connect();
-                          } catch (e) {
-                            addDebugLog(`Error connecting vapiInstance: ${e}`);
-                          }
-                        }
-                      });
-                      
-                      observer.disconnect();
-                      break;
-                    }
-                    
-                    const possibleButtons = [
-                      ...Array.from(node.querySelectorAll('button')),
-                      ...Array.from(node.querySelectorAll('div[role="button"]')),
-                      node
-                    ];
-                    
-                    for (const btn of possibleButtons) {
-                      if (
-                        (btn.textContent?.includes('AI Assistant') ||
-                         (btn instanceof HTMLElement && btn.style.backgroundColor === 'rgb(37, 211, 102)') ||
-                         (btn instanceof HTMLElement && btn.getAttribute('style')?.includes('rgb(37, 211, 102)')))
-                      ) {
-                        addDebugLog("Found AI Assistant button, attaching click handler");
-                        buttonRef.current = btn as HTMLDivElement;
-                        
-                        btn.addEventListener('click', () => {
-                          addDebugLog("AI Assistant button clicked!");
-                          activateRecording();
-                          
-                          if (vapiInstanceRef.current && vapiInstanceRef.current.connect) {
-                            try {
-                              addDebugLog("Connecting vapiInstance after button click");
-                              vapiInstanceRef.current.connect();
-                            } catch (e) {
-                              addDebugLog(`Error connecting vapiInstance: ${e}`);
-                            }
-                          }
-                        });
-                        
-                        observer.disconnect();
-                        break;
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          });
-
-          observer.observe(document.body, { childList: true, subtree: true });
-        };
-        
-        setupVapiButtonClickListener();
-
-        const customConfig = {
-          ...buttonConfig,
-          onMessage: handleMessage,
-          onTranscript: handleVoiceInput,
-          onStateChange: handleStateChange,
-          debug: true,
-          autoStart: false
-        };
-
         if (!hasShownWelcomeMessage.current) {
           hasShownWelcomeMessage.current = true;
           setTimeout(() => {
@@ -436,6 +302,15 @@ const Index = () => {
         if (!vapiInstanceRef.current) {
           try {
             addDebugLog("Initializing Vapi instance");
+            const customConfig = {
+              ...buttonConfig,
+              onMessage: handleMessage,
+              onTranscript: handleVoiceInput,
+              onStateChange: handleStateChange,
+              debug: true,
+              autoStart: false
+            };
+            
             vapiInstanceRef.current = window.vapiSDK.run({
               apiKey: apiKey,
               assistant: assistant,
@@ -466,7 +341,7 @@ const Index = () => {
     };
 
     return () => {
-      clearInterval(vapiButtonStateInterval);
+      clearInterval(staleLockCleanupInterval);
       if (vapiInstanceRef.current && vapiInstanceRef.current.destroy) {
         vapiInstanceRef.current.destroy();
       }
@@ -475,7 +350,7 @@ const Index = () => {
       }
       resetVideoLoadingState();
     };
-  }, [toast, isRecordingActive]);
+  }, [toast]);
 
   return (
     <div className="min-h-screen overflow-hidden">

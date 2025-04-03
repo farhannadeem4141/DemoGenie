@@ -2,6 +2,7 @@
 import React, { useEffect, useCallback, useRef } from 'react';
 import useSpeechRecognition from '@/hooks/useSpeechRecognition';
 import { useToast } from '@/hooks/use-toast';
+import VapiButtonManager from '@/utils/vapiButtonManager';
 
 interface NativeSpeechRecorderProps {
   className?: string;
@@ -30,6 +31,7 @@ const NativeSpeechRecorder: React.FC<NativeSpeechRecorderProps> = () => {
   const isTrackingVapiButton = useRef(false);
   const lastTranscriptRef = useRef('');
   const transcriptDebounceTimer = useRef<NodeJS.Timeout | null>(null);
+  const buttonManager = useRef<VapiButtonManager | null>(null);
   
   // Update ref when transcript changes
   useEffect(() => {
@@ -58,92 +60,28 @@ const NativeSpeechRecorder: React.FC<NativeSpeechRecorderProps> = () => {
     return deduplicatedWords.join(' ');
   };
   
-  const setupVapiButtonListener = useCallback(() => {
-    if (isTrackingVapiButton.current) return;
+  const handleButtonStateChange = useCallback((buttonState) => {
+    console.log("[NativeSpeech] Button state changed:", buttonState);
     
-    console.log("[NativeSpeech] Setting up Vapi button observer");
-    
-    const observer = new MutationObserver((mutations) => {
-      const vapiButton = document.querySelector('[id^="vapi-support-btn"]');
-      if (vapiButton) {
-        console.log("[NativeSpeech] Found Vapi button, attaching click listener");
-        
-        vapiButton.addEventListener('click', () => {
-          console.log("[NativeSpeech] Vapi button clicked, starting native recording");
-          resetTranscript();
-          
-          // Test that localStorage is accessible before attempting to start
-          try {
-            const testObj = { test: "accessibility check" };
-            localStorage.setItem('speech_recognition_test', JSON.stringify(testObj));
-            const retrieved = localStorage.getItem('speech_recognition_test');
-            if (!retrieved) {
-              throw new Error("Storage not accessible - could not retrieve test item");
-            }
-            const parsedTest = JSON.parse(retrieved);
-            if (!parsedTest || parsedTest.test !== "accessibility check") {
-              throw new Error("Storage test failed - retrieved value doesn't match saved value");
-            }
-            console.log("[NativeSpeech] localStorage access test passed, starting recognition");
-            startListening();
-          } catch (e) {
-            console.error("[NativeSpeech] localStorage test failed, cannot proceed with recording:", e);
-            toast({
-              variant: "destructive",
-              title: "Storage Access Error",
-              description: "Cannot save voice input - browser storage not accessible.",
-              duration: 3000,
-            });
-          }
-        });
-        
-        // Listen for Vapi modal close actions
-        document.addEventListener('click', (e) => {
-          const target = e.target as HTMLElement;
-          if (target && 
-              (target.classList.contains('vapi-close-btn') || 
-               target.classList.contains('vapi-overlay') ||
-               target.getAttribute('aria-label') === 'Close' ||
-               target.closest('[aria-label="Close"]'))) {
-            console.log("[NativeSpeech] Vapi close action detected, stopping native recording");
-            stopListening();
-          }
-        }, true);
-        
-        // Also observe Vapi button state changes to detect when conversation ends
-        const buttonObserver = new MutationObserver((mutations) => {
-          mutations.forEach(mutation => {
-            if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
-              const target = mutation.target as HTMLElement;
-              const hasIdleClass = target.classList.contains('vapi-btn-is-idle') || 
-                                  target.classList.contains('idle') ||
-                                  target.classList.contains('inactive');
-              
-              if (hasIdleClass && isListening) {
-                console.log("[NativeSpeech] Vapi button returned to idle state, stopping native recording");
-                stopListening();
-              }
-            }
-          });
-        });
-        
-        buttonObserver.observe(vapiButton, { attributes: true, attributeFilter: ['class'] });
-        isTrackingVapiButton.current = true;
-        observer.disconnect();
+    if (buttonManager.current?.shouldRecordingBeActive()) {
+      if (!isListening) {
+        console.log("[NativeSpeech] Button active, starting recognition");
+        resetTranscript();
+        startListening();
       }
-    });
-    
-    observer.observe(document.body, { childList: true, subtree: true });
-    
-    // Return a cleanup function
-    return () => {
-      if (observer) {
-        observer.disconnect();
+    } else {
+      if (isListening) {
+        console.log("[NativeSpeech] Button inactive, stopping recognition");
+        console.log("[NativeSpeech] Reasons: isVisible=", buttonState.isVisible, 
+                    "isIdle=", buttonState.isIdle, 
+                    "lastClick=", buttonState.lastClickTime ? 
+                    `${Math.round((Date.now() - buttonState.lastClickTime)/1000)}s ago` : "never");
+        stopListening();
       }
-    };
-  }, [isListening, startListening, stopListening, resetTranscript, toast]);
+    }
+  }, [isListening, startListening, stopListening, resetTranscript]);
   
-  // Set up Vapi button listener when component mounts
+  // Initialize button manager once
   useEffect(() => {
     if (!isSupported) {
       console.warn("[NativeSpeech] Speech recognition not supported in this browser");
@@ -156,37 +94,30 @@ const NativeSpeechRecorder: React.FC<NativeSpeechRecorderProps> = () => {
       return;
     }
     
-    console.log("[NativeSpeech] Setting up initial Vapi button listener");
-    const cleanup = setupVapiButtonListener();
+    console.log("[NativeSpeech] Initializing Vapi button manager");
     
-    // Also check for Vapi button immediately
-    const vapiButton = document.querySelector('[id^="vapi-support-btn"]');
-    if (vapiButton) {
-      console.log("[NativeSpeech] Found Vapi button on initial check");
-      setupVapiButtonListener();
+    if (!buttonManager.current) {
+      buttonManager.current = VapiButtonManager.getInstance();
+      buttonManager.current.onStateChange(handleButtonStateChange);
+      buttonManager.current.startMonitoring();
     }
     
-    // Poll for the Vapi button every second in case it's added after initial load
-    const intervalId = setInterval(() => {
-      if (!isTrackingVapiButton.current) {
-        const button = document.querySelector('[id^="vapi-support-btn"]');
-        if (button) {
-          console.log("[NativeSpeech] Found Vapi button during polling");
-          setupVapiButtonListener();
-        }
+    // Backup periodic check every 3 seconds
+    const checkInterval = setInterval(() => {
+      if (buttonManager.current) {
+        buttonManager.current.forceCheck();
       }
-    }, 1000);
+    }, 3000);
     
     return () => {
-      if (typeof cleanup === 'function') {
-        cleanup();
-      }
-      clearInterval(intervalId);
+      clearInterval(checkInterval);
+      
+      // Stop listening if component unmounts
       if (isListening) {
         stopListening();
       }
     };
-  }, [isSupported, setupVapiButtonListener, isListening, stopListening, toast]);
+  }, [isSupported, handleButtonStateChange, isListening, stopListening, toast]);
   
   // Handle errors
   useEffect(() => {
@@ -259,7 +190,6 @@ const NativeSpeechRecorder: React.FC<NativeSpeechRecorderProps> = () => {
           );
           
           console.log("[NativeSpeech] Successfully saved transcript to localStorage:", cleanedTranscript);
-          console.log("[NativeSpeech] Keys in localStorage:", Object.keys(localStorage));
           
           // Dispatch custom event for the system to capture
           window.dispatchEvent(new CustomEvent('voice_input', {
