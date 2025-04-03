@@ -1,13 +1,13 @@
 
 import React from 'react';
 import { Button } from '@/components/ui/button';
-import { ArrowRight, MessageCircle } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { MessageCircle } from 'lucide-react';
 import SpeechToTextButton from './SpeechToTextButton';
 
 const CTA: React.FC = () => {
   const activateDemo = () => {
     if (window.activateRecording) {
+      console.log("[DEBUG] Talk to Us button clicked, activating recording");
       window.activateRecording();
     }
   };
@@ -35,14 +35,7 @@ const CTA: React.FC = () => {
                 Talk to Us <MessageCircle className="ml-2 h-5 w-5" />
               </Button>
               
-              <Button 
-                variant="outline" 
-                size="lg"
-                onClick={activateDemo}
-                className="border-whatsapp text-whatsapp hover:bg-whatsapp/10"
-              >
-                Try Demo
-              </Button>
+              <SpeechToTextButton />
             </div>
           </div>
         </div>
