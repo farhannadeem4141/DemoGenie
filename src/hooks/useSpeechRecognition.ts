@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -21,6 +22,7 @@ interface UseSpeechRecognitionReturn {
 // Define the localStorage keys as constants to ensure consistency
 const NATIVE_VOICE_INPUT_KEY = 'native_voice_input_history';
 const VOICE_INPUT_KEY = 'voice_input_history';
+const TRANSCRIPT_KEY = 'transcript';
 
 // Clean transcript by removing duplicate words
 const cleanTranscript = (text: string): string => {
@@ -44,6 +46,11 @@ const cleanTranscript = (text: string): string => {
   return deduplicatedWords.join(' ');
 };
 
+// Track processed transcripts across hook instances
+const processedTranscripts = new Set<string>();
+let lastSaveTimestamp = 0;
+const SAVE_DEBOUNCE_TIME = 1000; // 1 second between saves
+
 const useSpeechRecognition = (options: SpeechRecognitionOptions = {}): UseSpeechRecognitionReturn => {
   const { toast } = useToast();
   const [isListening, setIsListening] = useState(false);
@@ -53,6 +60,8 @@ const useSpeechRecognition = (options: SpeechRecognitionOptions = {}): UseSpeech
   const isRecognitionSupported = useRef<boolean>(false);
   const lastSavedTranscriptRef = useRef<string>('');
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const shouldDispatchEventsRef = useRef<boolean>(true);
+  const instanceId = useRef<string>(`speech-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`);
 
   // Check if speech recognition is supported
   useEffect(() => {
@@ -72,13 +81,22 @@ const useSpeechRecognition = (options: SpeechRecognitionOptions = {}): UseSpeech
           duration: 5000,
         });
       } else {
-        console.log("Speech recognition is supported in this browser");
+        console.log(`[useSpeechRecognition:${instanceId.current}] Speech recognition is supported in this browser`);
       }
     }
+    
+    return () => {
+      // Clean up any event listeners or timers
+      shouldDispatchEventsRef.current = false;
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = null;
+      }
+    };
   }, [toast]);
 
   const saveTranscriptToLocalStorage = useCallback((text: string) => {
-    if (!text.trim()) return;
+    if (!text.trim() || !shouldDispatchEventsRef.current) return;
     
     try {
       // Clean the transcript before saving
@@ -86,15 +104,47 @@ const useSpeechRecognition = (options: SpeechRecognitionOptions = {}): UseSpeech
       
       // Don't save if it's the same as the last saved transcript
       if (cleanedText === lastSavedTranscriptRef.current) {
-        console.log('[useSpeechRecognition] Skipping duplicate transcript:', cleanedText);
+        console.log(`[useSpeechRecognition:${instanceId.current}] Skipping duplicate transcript:`, cleanedText);
         return;
       }
       
+      // Check if this transcript has been processed recently
+      if (processedTranscripts.has(cleanedText)) {
+        console.log(`[useSpeechRecognition:${instanceId.current}] Skipping already processed transcript:`, cleanedText);
+        return;
+      }
+      
+      // Debounce saving to avoid rapid succession saves
+      const now = Date.now();
+      if (now - lastSaveTimestamp < SAVE_DEBOUNCE_TIME) {
+        console.log(`[useSpeechRecognition:${instanceId.current}] Debouncing transcript save:`, cleanedText);
+        
+        if (debounceTimerRef.current) {
+          clearTimeout(debounceTimerRef.current);
+        }
+        
+        debounceTimerRef.current = setTimeout(() => {
+          if (shouldDispatchEventsRef.current) {
+            saveTranscriptToLocalStorage(text);
+          }
+        }, SAVE_DEBOUNCE_TIME);
+        
+        return;
+      }
+      
+      lastSaveTimestamp = now;
       lastSavedTranscriptRef.current = cleanedText;
-      console.log('[useSpeechRecognition] Saving cleaned transcript to localStorage:', cleanedText);
+      processedTranscripts.add(cleanedText);
+      
+      // Remove from processed set after 5 seconds to allow re-processing later
+      setTimeout(() => {
+        processedTranscripts.delete(cleanedText);
+      }, 5000);
+      
+      console.log(`[useSpeechRecognition:${instanceId.current}] Saving cleaned transcript to localStorage:`, cleanedText);
       
       // First, save to transcript key for immediate video search
-      localStorage.setItem('transcript', cleanedText);
+      localStorage.setItem(TRANSCRIPT_KEY, cleanedText);
       
       // Save to native_voice_input_history
       const nativeInputsStr = localStorage.getItem(NATIVE_VOICE_INPUT_KEY);
@@ -106,7 +156,7 @@ const useSpeechRecognition = (options: SpeechRecognitionOptions = {}): UseSpeech
           savedInputs = Array.isArray(parsed) ? parsed : [];
         }
       } catch (parseError) {
-        console.error('[useSpeechRecognition] Error parsing existing inputs, resetting:', parseError);
+        console.error(`[useSpeechRecognition:${instanceId.current}] Error parsing existing inputs, resetting:`, parseError);
         savedInputs = [];
       }
       
@@ -131,7 +181,7 @@ const useSpeechRecognition = (options: SpeechRecognitionOptions = {}): UseSpeech
           standardInputs = Array.isArray(parsed) ? parsed : [];
         }
       } catch (parseError) {
-        console.error('[useSpeechRecognition] Error parsing standard inputs, resetting:', parseError);
+        console.error(`[useSpeechRecognition:${instanceId.current}] Error parsing standard inputs, resetting:`, parseError);
         standardInputs = [];
       }
       
@@ -140,17 +190,20 @@ const useSpeechRecognition = (options: SpeechRecognitionOptions = {}): UseSpeech
         JSON.stringify([newInput, ...standardInputs].slice(0, 50))
       );
       
-      console.log("[useSpeechRecognition] Successfully saved voice input to localStorage:", cleanedText);
+      console.log(`[useSpeechRecognition:${instanceId.current}] Successfully saved voice input to localStorage:`, cleanedText);
       
-      // Dispatch custom event for the system to capture
-      window.dispatchEvent(new CustomEvent('voice_input', {
-        detail: {
-          type: 'voice_input',
-          text: cleanedText
-        }
-      }));
+      // Only dispatch if we're not cleaning up
+      if (shouldDispatchEventsRef.current) {
+        // Dispatch custom event for the system to capture
+        window.dispatchEvent(new CustomEvent('voice_input', {
+          detail: {
+            type: 'voice_input',
+            text: cleanedText
+          }
+        }));
+      }
     } catch (e) {
-      console.error('[useSpeechRecognition] Error saving voice input to localStorage:', e);
+      console.error(`[useSpeechRecognition:${instanceId.current}] Error saving voice input to localStorage:`, e);
     }
   }, []);
 
@@ -167,7 +220,7 @@ const useSpeechRecognition = (options: SpeechRecognitionOptions = {}): UseSpeech
     }
     
     try {
-      console.log("[useSpeechRecognition] Starting speech recognition...");
+      console.log(`[useSpeechRecognition:${instanceId.current}] Starting speech recognition...`);
       // Use the correct constructor
       const SpeechRecognitionConstructor = window.SpeechRecognition || 
                                          window.webkitSpeechRecognition;
@@ -188,20 +241,20 @@ const useSpeechRecognition = (options: SpeechRecognitionOptions = {}): UseSpeech
       try {
         if (!localStorage.getItem(NATIVE_VOICE_INPUT_KEY)) {
           localStorage.setItem(NATIVE_VOICE_INPUT_KEY, '[]');
-          console.log("[useSpeechRecognition] Initialized empty native voice input history");
+          console.log(`[useSpeechRecognition:${instanceId.current}] Initialized empty native voice input history`);
         }
         
         if (!localStorage.getItem(VOICE_INPUT_KEY)) {
           localStorage.setItem(VOICE_INPUT_KEY, '[]');
-          console.log("[useSpeechRecognition] Initialized empty standard voice input history");
+          console.log(`[useSpeechRecognition:${instanceId.current}] Initialized empty standard voice input history`);
         }
       } catch (storageError) {
-        console.error("[useSpeechRecognition] Error initializing localStorage:", storageError);
+        console.error(`[useSpeechRecognition:${instanceId.current}] Error initializing localStorage:`, storageError);
       }
       
       // Event handlers
       recognitionRef.current.onstart = () => {
-        console.log('[useSpeechRecognition] Native speech recognition started');
+        console.log(`[useSpeechRecognition:${instanceId.current}] Native speech recognition started`);
         setIsListening(true);
         setTranscript(''); // Clear transcript when starting new recording
         toast({
@@ -232,16 +285,16 @@ const useSpeechRecognition = (options: SpeechRecognitionOptions = {}): UseSpeech
           
           if (finalTranscript) {
             newTranscript = prev ? `${prev} ${finalTranscript}` : finalTranscript;
+            
+            // Save final transcripts immediately
+            if (newTranscript.trim() && finalTranscript.trim()) {
+              saveTranscriptToLocalStorage(newTranscript);
+            }
           }
           
-          // For interim results, use the current transcript as-is
+          // For interim results, show but don't save yet
           if (currentTranscript) {
             newTranscript = prev ? `${prev} ${currentTranscript}` : currentTranscript;
-          }
-          
-          // Save transcript to localStorage in real-time, even for interim results
-          if (newTranscript.trim()) {
-            saveTranscriptToLocalStorage(newTranscript);
           }
           
           return newTranscript;
@@ -249,7 +302,7 @@ const useSpeechRecognition = (options: SpeechRecognitionOptions = {}): UseSpeech
       };
       
       recognitionRef.current.onerror = (event: SpeechRecognitionErrorEvent) => {
-        console.error('[useSpeechRecognition] Speech recognition error:', event.error, event.message);
+        console.error(`[useSpeechRecognition:${instanceId.current}] Speech recognition error:`, event.error, event.message);
         setError(`Error: ${event.error} - ${event.message || 'Unknown error'}`);
         toast({
           variant: "destructive",
@@ -260,7 +313,7 @@ const useSpeechRecognition = (options: SpeechRecognitionOptions = {}): UseSpeech
       };
       
       recognitionRef.current.onend = () => {
-        console.log('[useSpeechRecognition] Speech recognition ended');
+        console.log(`[useSpeechRecognition:${instanceId.current}] Speech recognition ended`);
         setIsListening(false);
         
         toast({
@@ -271,15 +324,15 @@ const useSpeechRecognition = (options: SpeechRecognitionOptions = {}): UseSpeech
         
         // If we have a transcript, make sure it gets saved and dispatched
         if (transcript.trim()) {
-          console.log("[useSpeechRecognition] Saving final transcript on end:", transcript);
+          console.log(`[useSpeechRecognition:${instanceId.current}] Saving final transcript on end:`, transcript);
           saveTranscriptToLocalStorage(transcript);
         }
       };
       
       recognitionRef.current.start();
-      console.log("[useSpeechRecognition] Recognition started successfully");
+      console.log(`[useSpeechRecognition:${instanceId.current}] Recognition started successfully`);
     } catch (err: any) {
-      console.error('[useSpeechRecognition] Failed to start speech recognition:', err);
+      console.error(`[useSpeechRecognition:${instanceId.current}] Failed to start speech recognition:`, err);
       setError(`Failed to start: ${err.message || err}`);
       setIsListening(false);
       toast({
@@ -293,7 +346,7 @@ const useSpeechRecognition = (options: SpeechRecognitionOptions = {}): UseSpeech
 
   const stopListening = useCallback(() => {
     if (recognitionRef.current) {
-      console.log("[useSpeechRecognition] Stopping speech recognition");
+      console.log(`[useSpeechRecognition:${instanceId.current}] Stopping speech recognition`);
       recognitionRef.current.stop();
       setIsListening(false);
       
@@ -304,7 +357,7 @@ const useSpeechRecognition = (options: SpeechRecognitionOptions = {}): UseSpeech
       
       // One last save on manual stop
       if (transcript.trim()) {
-        console.log("[useSpeechRecognition] Saving transcript on manual stop:", transcript);
+        console.log(`[useSpeechRecognition:${instanceId.current}] Saving transcript on manual stop:`, transcript);
         saveTranscriptToLocalStorage(transcript);
       }
       
@@ -324,6 +377,7 @@ const useSpeechRecognition = (options: SpeechRecognitionOptions = {}): UseSpeech
   // Clean up on unmount
   useEffect(() => {
     return () => {
+      shouldDispatchEventsRef.current = false;
       if (recognitionRef.current) {
         recognitionRef.current.abort();
       }

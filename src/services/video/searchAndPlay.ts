@@ -1,236 +1,160 @@
 
-import { supabase } from '@/integrations/supabase/client';
-import { VideoSearchResult } from './types';
-import { validateVideoUrl } from './videoUrlValidator';
+import { supabase } from "@/integrations/supabase/client";
+import { validateVideoUrl } from "./videoUrlValidator";
+import { validateSearchKeyword } from "@/utils/videoLoadingManager";
+import { toast } from "@/hooks/use-toast";
 
-interface VideoSearchDetails {
+interface SearchAndPlayResult {
   success: boolean;
-  errorDetails?: {
-    step: string;
-    message: string;
-    technicalDetails?: any;
-  };
+  errorDetails?: string;
   video?: {
     id: number;
     video_url: string;
-    video_name: string; // Changed from optional to required
+    video_name: string;
     keyword: string;
   };
 }
 
-export async function searchAndPlayVideo(keyword: string): Promise<VideoSearchDetails> {
-  console.log("%c [VIDEO SEARCH] ========== SEARCH START ==========", "background: #4CAF50; color: white; padding: 4px; border-radius: 4px; font-weight: bold;");
-  console.log("%c [VIDEO SEARCH] Starting search for keyword: " + keyword, "background: #4CAF50; color: white; padding: 2px; border-radius: 4px;");
+// Track recent searches to prevent duplicates
+const recentSearches = new Set<string>();
+const RECENT_SEARCH_TIMEOUT = 5000; // 5 seconds
+
+/**
+ * Search for videos with the given keyword and play the first match
+ */
+export const searchAndPlayVideo = async (keyword: string): Promise<SearchAndPlayResult> => {
+  console.log(`[SearchAndPlay] Searching for video with keyword: "${keyword}"`);
   
-  // Define fallback video URL with the correct Supabase URL
-  const fallbackVideoUrl = "https://boncletesuahajikgrrz.supabase.co/storage/v1/object/public/videos//WhatsApp%20end-to-end%20encryption.mp4";
-  
-  // Clean and normalize the keyword for search
-  if (!keyword || keyword.trim() === '') {
-    console.error("%c [VIDEO SEARCH] Invalid or empty keyword provided", "background: #f44336; color: white; padding: 2px; border-radius: 4px;");
+  // Check if this is a very recent search (within 5 seconds)
+  if (recentSearches.has(keyword)) {
+    console.log(`[SearchAndPlay] Skipping duplicate search for: "${keyword}" (searched recently)`);
     return {
       success: false,
-      errorDetails: {
-        step: 'input_validation',
-        message: 'Invalid or empty keyword provided'
-      }
+      errorDetails: "Duplicate search request - please wait before searching for the same term again"
     };
   }
   
-  const normalizedKeyword = keyword.trim().toLowerCase();
-  console.log("%c [VIDEO SEARCH] Normalized keyword: " + normalizedKeyword, "background: #4CAF50; color: white; padding: 2px; border-radius: 4px;");
+  // Add to recent searches and remove after timeout
+  recentSearches.add(keyword);
+  setTimeout(() => {
+    recentSearches.delete(keyword);
+  }, RECENT_SEARCH_TIMEOUT);
   
-  // Special handling for "Quick replies" - log that we're explicitly testing for this keyword
-  if (normalizedKeyword === "quick replies") {
-    console.log("%c [VIDEO SEARCH] Special test case detected: Quick replies keyword", "background: #4CAF50; color: white; padding: 2px; border-radius: 4px;");
-  }
-  
-  // First perform a database health check
-  const { count, error: dbCheckError } = await supabase
-    .from('videos') // Changed from 'Videos' to lowercase 'videos'
-    .select('*', { count: 'exact', head: true });
-  
-  if (dbCheckError) {
-    console.error("%c [VIDEO SEARCH] Database connectivity error:", "background: #f44336; color: white; padding: 2px; border-radius: 4px;", dbCheckError);
-    return {
-      success: false,
-      errorDetails: {
-        step: 'database_connection',
-        message: 'Could not connect to the database',
-        technicalDetails: dbCheckError
-      }
-    };
-  }
-  
-  console.log("%c [VIDEO SEARCH] Database check successful - found " + count + " total videos", "background: #4CAF50; color: white; padding: 2px; border-radius: 4px;");
-  
-  // Construct the query to search in multiple tag columns
-  let query = supabase
-    .from('videos') // Changed from 'Videos' to lowercase 'videos'
-    .select('*');
-  
-  // Build both exact and case-insensitive conditions
-  const exactQuery = `video_tag1.eq.${normalizedKeyword},video_tag2.eq.${normalizedKeyword},video_tag3.eq.${normalizedKeyword}`;
-  const icontainsQuery = `video_tag1.ilike.%${normalizedKeyword}%,video_tag2.ilike.%${normalizedKeyword}%,video_tag3.ilike.%${normalizedKeyword}%`;
-  
-  query = query.or(exactQuery + ',' + icontainsQuery);
-  
-  // Generate query string for logging
-  const queryString = `SELECT * FROM "videos" WHERE (${exactQuery}) OR (${icontainsQuery})`; // Changed from "Videos" to lowercase "videos"
-  console.log("%c [VIDEO SEARCH] SQL query: " + queryString, "background: #4CAF50; color: white; padding: 2px; border-radius: 4px;");
-  
-  // Execute the query
-  console.log("%c [VIDEO SEARCH] Executing database query...", "background: #4CAF50; color: white; padding: 2px; border-radius: 4px;");
-  const { data, error } = await query;
-  
-  if (error) {
-    console.error("%c [VIDEO SEARCH] Query execution error:", "background: #f44336; color: white; padding: 2px; border-radius: 4px;", error);
-    return {
-      success: false,
-      errorDetails: {
-        step: 'database_query',
-        message: 'Error executing database query',
-        technicalDetails: error
-      }
-    };
-  }
-  
-  // Log the results for debugging
-  console.log("%c [VIDEO SEARCH] Query returned " + (data?.length || 0) + " results", "background: #4CAF50; color: white; padding: 2px; border-radius: 4px;");
-  
-  if (data && data.length > 0) {
-    console.log("%c [VIDEO SEARCH] Found matching videos:", "background: #4CAF50; color: white; padding: 2px; border-radius: 4px;");
-    console.table(data.map(v => ({ 
-      id: v.id, 
-      name: v.video_name, 
-      url: v.video_url?.substring(0, 30) + '...',
-      tag1: v.video_tag1,
-      tag2: v.video_tag2,
-      tag3: v.video_tag3
-    })));
-  } else {
-    console.log("%c [VIDEO SEARCH] No direct matches found", "background: #ff9800; color: white; padding: 2px; border-radius: 4px;");
-  }
-  
-  if (!data || data.length === 0) {
-    console.log("%c [VIDEO SEARCH] No matching videos found for keyword: " + normalizedKeyword, "background: #ff9800; color: white; padding: 2px; border-radius: 4px;");
-    
-    // Try a more lenient search for partial matches
-    console.log("%c [VIDEO SEARCH] Trying more lenient search...", "background: #4CAF50; color: white; padding: 2px; border-radius: 4px;");
-    
-    const lenientQuery = supabase
-      .from('videos') // Changed from 'Videos' to lowercase 'videos'
-      .select('*')
-      .or(`video_tag1.ilike.%${normalizedKeyword.toLowerCase()}%,video_tag2.ilike.%${normalizedKeyword.toLowerCase()}%,video_tag3.ilike.%${normalizedKeyword.toLowerCase()}%`);
-    
-    const { data: lenientData, error: lenientError } = await lenientQuery;
-    
-    if (lenientError) {
-      console.error("%c [VIDEO SEARCH] Lenient search error:", "background: #f44336; color: white; padding: 2px; border-radius: 4px;", lenientError);
-      return {
+  try {
+    // Validate the keyword
+    const validKeyword = validateSearchKeyword(keyword);
+    if (!validKeyword) {
+      console.error(`[SearchAndPlay] Invalid keyword: "${keyword}"`);
+      return { 
         success: false,
-        errorDetails: {
-          step: 'lenient_search',
-          message: 'Error executing lenient search query',
-          technicalDetails: lenientError
-        }
+        errorDetails: "Invalid search keyword" 
       };
     }
     
-    if (!lenientData || lenientData.length === 0) {
-      console.log("%c [VIDEO SEARCH] Even lenient search returned no results", "background: #f44336; color: white; padding: 2px; border-radius: 4px;");
-      console.log("%c [VIDEO SEARCH] Using fallback video instead...", "background: #4CAF50; color: white; padding: 2px; border-radius: 4px;");
+    console.log(`[SearchAndPlay] Searching with validated keyword: "${validKeyword}"`);
+    
+    // Query Supabase for videos matching the keyword
+    const { data, error } = await supabase
+      .from("videos")
+      .select("*")
+      .or(
+        `video_tag1.ilike.%${validKeyword}%,` +
+        `video_tag2.ilike.%${validKeyword}%,` +
+        `video_tag3.ilike.%${validKeyword}%,` +
+        `video_name.ilike.%${validKeyword}%`
+      )
+      .limit(5);
       
-      // Use the fallback video URL directly instead of querying for a fallback
-      const validatedFallbackUrl = validateVideoUrl(fallbackVideoUrl);
-      
-      if (!validatedFallbackUrl) {
-        console.error("%c [VIDEO SEARCH] Fallback video has invalid URL:", "background: #f44336; color: white; padding: 2px; border-radius: 4px;", fallbackVideoUrl);
-        return {
-          success: false,
-          errorDetails: {
-            step: 'url_validation',
-            message: `Fallback video has invalid URL: ${fallbackVideoUrl || 'empty'}`,
-          }
-        };
-      }
-      
-      console.log("%c [VIDEO SEARCH] Using hardcoded fallback video as last resort", "background: #ff9800; color: white; padding: 2px; border-radius: 4px;");
-      return {
-        success: true,
-        video: {
-          id: 3,  // Updated to ID 3 as specified
-          video_url: validatedFallbackUrl,
-          video_name: 'WhatsApp end-to-end encryption',
-          keyword: normalizedKeyword
-        }
+    if (error) {
+      console.error(`[SearchAndPlay] Database error:`, error);
+      return { 
+        success: false,
+        errorDetails: `Database error: ${error.message}` 
       };
     }
     
-    console.log("%c [VIDEO SEARCH] Found videos with lenient search:", "background: #4CAF50; color: white; padding: 2px; border-radius: 4px;");
-    console.table(lenientData.map(v => ({ 
-      id: v.id, 
-      name: v.video_name, 
-      url: v.video_url?.substring(0, 30) + '...',
-      tag1: v.video_tag1,
-      tag2: v.video_tag2,
-      tag3: v.video_tag3
-    })));
-    
-    // Validate and sanitize video URL
-    const videoUrl = validateVideoUrl(lenientData[0].video_url);
-    if (!videoUrl) {
-      console.error("%c [VIDEO SEARCH] Found video has invalid URL:", "background: #f44336; color: white; padding: 2px; border-radius: 4px;", lenientData[0].video_url);
-      return {
-        success: false,
-        errorDetails: {
-          step: 'url_validation',
-          message: `Invalid video URL: ${lenientData[0].video_url || 'empty'}`,
-          technicalDetails: {
-            record: lenientData[0]
+    if (!data || data.length === 0) {
+      console.log(`[SearchAndPlay] No videos found for keyword: "${validKeyword}"`);
+      
+      // Try a broader search with just part of the keyword
+      if (validKeyword.length > 3) {
+        const partialKeyword = validKeyword.substring(0, Math.ceil(validKeyword.length / 2));
+        console.log(`[SearchAndPlay] Trying broader search with: "${partialKeyword}"`);
+        
+        const { data: broaderData } = await supabase
+          .from("videos")
+          .select("*")
+          .or(
+            `video_tag1.ilike.%${partialKeyword}%,` +
+            `video_tag2.ilike.%${partialKeyword}%,` +
+            `video_tag3.ilike.%${partialKeyword}%,` +
+            `video_name.ilike.%${partialKeyword}%`
+          )
+          .limit(1);
+          
+        if (broaderData && broaderData.length > 0) {
+          // Found a video with broader search
+          const video = broaderData[0];
+          const validatedUrl = validateVideoUrl(video.video_url);
+          
+          if (validatedUrl) {
+            console.log(`[SearchAndPlay] Found video with broader search:`, video.video_name);
+            return {
+              success: true,
+              video: {
+                id: video.id,
+                video_url: validatedUrl,
+                video_name: video.video_name || "Video",
+                keyword: validKeyword
+              }
+            };
           }
         }
+      }
+      
+      return { 
+        success: false,
+        errorDetails: `No videos found matching: ${validKeyword}` 
       };
     }
     
-    console.log("%c [VIDEO SEARCH] Successfully found and validated video with lenient search", "background: #4CAF50; color: white; padding: 2px; border-radius: 4px;");
-    // Return the first matching video - ensure video_name is always a string
+    console.log(`[SearchAndPlay] Found ${data.length} videos for keyword: "${validKeyword}"`);
+    
+    // Filter to only include videos with valid URLs
+    const validVideos = data
+      .map(video => ({
+        ...video,
+        video_url: validateVideoUrl(video.video_url)
+      }))
+      .filter(video => !!video.video_url);
+      
+    if (validVideos.length === 0) {
+      console.error(`[SearchAndPlay] Found videos but URLs were invalid`);
+      return { 
+        success: false,
+        errorDetails: "Found matching videos but URLs were invalid" 
+      };
+    }
+    
+    // Use the first valid video
+    const selectedVideo = validVideos[0];
+    console.log(`[SearchAndPlay] Selected video: "${selectedVideo.video_name}" (ID: ${selectedVideo.id})`);
+    
     return {
       success: true,
       video: {
-        id: lenientData[0].id,
-        video_url: videoUrl,
-        video_name: lenientData[0].video_name || `Video related to "${normalizedKeyword}"`,
-        keyword: normalizedKeyword
+        id: selectedVideo.id,
+        video_url: selectedVideo.video_url,
+        video_name: selectedVideo.video_name || "Video",
+        keyword: validKeyword
       }
     };
-  }
-  
-  // Validate and sanitize video URL for direct matches
-  const videoUrl = validateVideoUrl(data[0].video_url);
-  if (!videoUrl) {
-    console.error("%c [VIDEO SEARCH] Found video has invalid URL:", "background: #f44336; color: white; padding: 2px; border-radius: 4px;", data[0].video_url);
-    return {
+    
+  } catch (error) {
+    console.error(`[SearchAndPlay] Unexpected error:`, error);
+    return { 
       success: false,
-      errorDetails: {
-        step: 'url_validation',
-        message: `Invalid video URL: ${data[0].video_url || 'empty'}`,
-        technicalDetails: {
-          record: data[0]
-        }
-      }
+      errorDetails: `Unexpected error: ${error instanceof Error ? error.message : 'Unknown error'}` 
     };
   }
-  
-  console.log("%c [VIDEO SEARCH] Successfully found and validated video with direct search", "background: #4CAF50; color: white; padding: 2px; border-radius: 4px;");
-  // Return the first matching video - ensure video_name is always a string
-  return {
-    success: true,
-    video: {
-      id: data[0].id,
-      video_url: videoUrl,
-      video_name: data[0].video_name || `Video related to "${normalizedKeyword}"`,
-      keyword: normalizedKeyword
-    }
-  };
-}
+};

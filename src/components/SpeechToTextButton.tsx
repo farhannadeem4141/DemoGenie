@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+
+import React, { useState, useRef } from 'react';
 import { ArrowRight, Mic, MicOff } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import useSpeechRecognition from '@/hooks/useSpeechRecognition';
@@ -8,6 +9,9 @@ const SpeechToTextButton = () => {
   const [isRecording, setIsRecording] = useState(false);
   const { toast } = useToast();
   const LOCAL_STORAGE_KEY = 'voice_input_history';
+  const isProcessingRef = useRef(false);
+  const buttonClickTimeRef = useRef(0);
+  const CLICK_DEBOUNCE_TIME = 1000; // 1 second debounce for button clicks
 
   const {
     isListening,
@@ -24,6 +28,14 @@ const SpeechToTextButton = () => {
   });
 
   const toggleRecording = () => {
+    // Debounce rapid clicks
+    const now = Date.now();
+    if (now - buttonClickTimeRef.current < CLICK_DEBOUNCE_TIME) {
+      console.log("[DEBUG] Debouncing button click - too soon since last click");
+      return;
+    }
+    buttonClickTimeRef.current = now;
+    
     console.log("[DEBUG] Try Demo button clicked, initiating recording");
     if (isRecording) {
       stopRecording();
@@ -33,6 +45,11 @@ const SpeechToTextButton = () => {
   };
 
   const startRecording = () => {
+    if (isProcessingRef.current) {
+      console.log("[DEBUG] Already processing, ignoring start request");
+      return;
+    }
+    
     if (!isSupported) {
       toast({
         variant: "destructive",
@@ -61,7 +78,14 @@ const SpeechToTextButton = () => {
   };
 
   const stopRecording = () => {
+    if (isProcessingRef.current) {
+      console.log("[DEBUG] Already processing, ignoring stop request");
+      return;
+    }
+    
     console.log("[DEBUG] Stopping recording and processing transcript");
+    isProcessingRef.current = true;
+    
     stopListening();
     setIsRecording(false);
     
@@ -85,7 +109,8 @@ const SpeechToTextButton = () => {
         const audioEntry = {
           text: transcript,
           timestamp: Date.now(),
-          keywords: keywords
+          keywords: keywords,
+          source: 'speechToText'
         };
         
         // Get existing entries or create new array
@@ -103,7 +128,8 @@ const SpeechToTextButton = () => {
         window.dispatchEvent(new CustomEvent('voice_input', {
           detail: {
             type: 'voice_input',
-            text: transcript
+            text: transcript,
+            source: 'speechToText'
           }
         }));
         
@@ -131,6 +157,12 @@ const SpeechToTextButton = () => {
         duration: 3000,
       });
     }
+    
+    // Reset processing flag after a delay
+    setTimeout(() => {
+      isProcessingRef.current = false;
+      console.log("[DEBUG] Processing complete, ready for next recording");
+    }, 2000);
   };
 
   // Extract meaningful keywords from transcript
@@ -179,6 +211,14 @@ const SpeechToTextButton = () => {
     // If we have priority matches, use those; otherwise use the filtered words
     const keywordsToUse = priorityMatches.length > 0 ? 
       priorityMatches : filteredWords;
+    
+    console.log("[DEBUG] Full keyword extraction:", { 
+      original: text,
+      cleaned: cleanedText,
+      filtered: filteredWords, 
+      priority: priorityMatches,
+      final: keywordsToUse.slice(0, 3)
+    });
     
     // Take up to 3 keywords
     return keywordsToUse.slice(0, 3);

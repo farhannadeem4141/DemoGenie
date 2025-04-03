@@ -21,6 +21,8 @@ class VideoLoadingManagerClass {
   private lockTimeout: NodeJS.Timeout | null = null;
   private debugMode: boolean = true;
   private lastResetTime: number = 0;
+  private processedVideoIds = new Set<string>();
+  private lastTranscriptProcessTime: number = 0;
 
   constructor() {
     this.debug('VideoLoadingManager initialized');
@@ -40,6 +42,7 @@ class VideoLoadingManagerClass {
   public acquireVideoLoadingLock(requestId: string): boolean {
     // If already has lock with same ID, return true
     if (this.currentLock === requestId) {
+      this.debug(`Already has lock: ${requestId}, returning true`);
       return true;
     }
     
@@ -55,6 +58,10 @@ class VideoLoadingManagerClass {
     this.pendingRequests.add(requestId);
     
     // Set a safety timeout to auto-release lock after 15 seconds
+    if (this.lockTimeout) {
+      clearTimeout(this.lockTimeout);
+    }
+    
     this.lockTimeout = setTimeout(() => {
       this.debug(`Force-releasing stale lock: ${this.currentLock}`);
       this.releaseVideoLoadingLock(this.currentLock || '');
@@ -83,31 +90,72 @@ class VideoLoadingManagerClass {
     }
     
     // Process next request in queue if available
-    if (this.requestQueue.length > 0) {
-      const nextRequest = this.requestQueue.shift();
-      if (nextRequest) {
-        this.debug(`Processing next queued request: ${nextRequest.name}`);
-        // Dispatch event to process this video
-        window.dispatchEvent(new CustomEvent('process_pending_video', {
-          detail: {
-            id: nextRequest.id,
-            url: nextRequest.url,
-            name: nextRequest.name,
-            keyword: nextRequest.keyword
-          }
-        }));
+    this.processNextQueuedRequest();
+  }
+
+  private processNextQueuedRequest(): void {
+    if (this.requestQueue.length === 0) return;
+    
+    // Find a request that hasn't been processed recently
+    let nextRequest: VideoRequest | undefined;
+    let i = 0;
+    
+    while (i < this.requestQueue.length) {
+      const request = this.requestQueue[i];
+      const videoIdKey = `${request.id}-${request.url}`;
+      
+      // Skip if we've processed this video recently
+      if (this.processedVideoIds.has(videoIdKey)) {
+        this.debug(`Skipping recently processed video: ${request.name}`);
+        this.requestQueue.splice(i, 1); // Remove from queue
+      } else {
+        nextRequest = request;
+        this.requestQueue.splice(i, 1); // Remove from queue
+        break;
       }
+      
+      i++;
+    }
+    
+    if (nextRequest) {
+      this.debug(`Processing next queued request: ${nextRequest.name}`);
+      
+      // Mark this video as processed
+      const videoIdKey = `${nextRequest.id}-${nextRequest.url}`;
+      this.processedVideoIds.add(videoIdKey);
+      
+      // Set a timeout to remove from processed set after 10 seconds
+      setTimeout(() => {
+        this.processedVideoIds.delete(videoIdKey);
+        this.debug(`Removed ${nextRequest?.name} from processed videos list`);
+      }, 10000);
+      
+      // Dispatch event to process this video
+      window.dispatchEvent(new CustomEvent('process_pending_video', {
+        detail: {
+          id: nextRequest.id,
+          url: nextRequest.url,
+          name: nextRequest.name,
+          keyword: nextRequest.keyword
+        }
+      }));
     }
   }
 
   public queueVideoRequest(video: { id: number, url: string, name: string, keyword: string }): void {
+    // Generate a unique ID for this video
+    const videoIdKey = `${video.id}-${video.url}`;
+    
     // Check if this video is already in the queue
     const isDuplicate = this.requestQueue.some(req => 
       req.id === video.id && req.url === video.url
     );
     
-    if (isDuplicate) {
-      this.debug(`Skipping duplicate video request: ${video.name}`);
+    // Check if we've processed this video recently
+    const recentlyProcessed = this.processedVideoIds.has(videoIdKey);
+    
+    if (isDuplicate || recentlyProcessed) {
+      this.debug(`Skipping duplicate/recent video request: ${video.name}`);
       return;
     }
     
@@ -122,6 +170,11 @@ class VideoLoadingManagerClass {
     });
     
     this.debug(`Video request queued: ${video.name}`, { queueLength: this.requestQueue.length });
+    
+    // If not currently processing, try to process next request
+    if (!this.isProcessing && !this.currentLock) {
+      this.processNextQueuedRequest();
+    }
   }
 
   public isProcessingVideo(): boolean {
@@ -137,8 +190,51 @@ class VideoLoadingManagerClass {
     }
     
     // Only reset if we don't have active requests
-    if (this.requestQueue.length === 0 && this.pendingRequests.size === 0) {
-      this.debug('Clearing stale video requests. Before:', this.pendingRequests.size);
+    if (this.requestQueue.length > 0 || this.pendingRequests.size > 0 || this.isProcessing) {
+      this.debug('Not resetting - active requests exist', { 
+        queueLength: this.requestQueue.length, 
+        pendingRequests: this.pendingRequests.size,
+        isProcessing: this.isProcessing 
+      });
+      return;
+    }
+    
+    this.debug('Clearing stale video requests. Before:', this.pendingRequests.size);
+    this.isProcessing = false;
+    this.currentLock = null;
+    
+    if (this.lockTimeout) {
+      clearTimeout(this.lockTimeout);
+      this.lockTimeout = null;
+    }
+    
+    this.lastResetTime = now;
+  }
+
+  public clearStaleLocks(): void {
+    this.debug('Clearing stale video requests. Before:', this.pendingRequests.size);
+    
+    // Only release lock if it's been more than 15 seconds
+    const now = Date.now();
+    let shouldRelease = false;
+    
+    if (this.currentLock && this.isProcessing) {
+      const pendingRequestArray = Array.from(this.pendingRequests);
+      const currentLockRequest = pendingRequestArray.find(id => id === this.currentLock);
+      
+      if (currentLockRequest) {
+        const matchingQueueItem = this.requestQueue.find(req => req.requestId === currentLockRequest);
+        if (matchingQueueItem && now - matchingQueueItem.requestTime > 15000) {
+          shouldRelease = true;
+          this.debug(`Force releasing stale lock ${this.currentLock} after 15 seconds`);
+        }
+      } else {
+        shouldRelease = true;
+        this.debug(`Force releasing orphaned lock ${this.currentLock}`);
+      }
+    }
+    
+    if (shouldRelease) {
       this.isProcessing = false;
       this.currentLock = null;
       
@@ -146,35 +242,29 @@ class VideoLoadingManagerClass {
         clearTimeout(this.lockTimeout);
         this.lockTimeout = null;
       }
-      
-      this.lastResetTime = now;
-    } else {
-      this.debug('Not resetting - active requests exist', { 
-        queueLength: this.requestQueue.length, 
-        pendingRequests: this.pendingRequests.size 
-      });
     }
-  }
-
-  public clearStaleLocks(): void {
-    this.debug('Clearing stale video requests. Before:', this.pendingRequests.size);
-    this.isProcessing = false;
-    this.currentLock = null;
     
     // Only keep recent requests in queue (less than 30 seconds old)
-    const now = Date.now();
     this.requestQueue = this.requestQueue.filter(req => now - req.requestTime < 30000);
     this.debug('Updated queue length after cleanup:', this.requestQueue.length);
     
-    if (this.lockTimeout) {
-      clearTimeout(this.lockTimeout);
-      this.lockTimeout = null;
+    // If not processing and have items in queue, process next
+    if (!this.isProcessing && !this.currentLock && this.requestQueue.length > 0) {
+      this.processNextQueuedRequest();
     }
   }
 
   // Keep track of recently processed transcripts to avoid duplicates
   public isNewTranscript(transcript: string): boolean {
     if (!transcript) return false;
+    
+    // Rate limit transcript processing (no more than once per 1.5 seconds)
+    const now = Date.now();
+    if (now - this.lastTranscriptProcessTime < 1500) {
+      this.debug(`Throttling transcript processing, too soon since last process`);
+      return false;
+    }
+    this.lastTranscriptProcessTime = now;
     
     // Clean and lowercase for comparison
     const cleanedTranscript = transcript.toLowerCase().trim();
@@ -227,8 +317,14 @@ class VideoLoadingManagerClass {
 
   // Check if a video is already in the queue
   public isVideoAlreadyQueued(id: number, url: string): boolean {
-    return this.requestQueue.some(req => req.id === id && req.url === url) || 
-           (this.isProcessing && this.currentLock && this.currentLock.includes(`video-${id}`));
+    const videoIdKey = `${id}-${url}`;
+    const inQueue = this.requestQueue.some(req => req.id === id && req.url === url);
+    const recentlyProcessed = this.processedVideoIds.has(videoIdKey);
+    const activelyProcessing = this.isProcessing && 
+                              this.currentLock && 
+                              this.currentLock.includes(`video-${id}`);
+    
+    return inQueue || recentlyProcessed || activelyProcessing;
   }
 }
 
