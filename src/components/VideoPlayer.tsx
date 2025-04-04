@@ -37,17 +37,18 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const playAttemptRef = useRef(false);
   const safeToLoadRef = useRef(false);
   const processingUrlRef = useRef(false);
+  const playerLogId = useRef(`player-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`);
   
   // Log mount/unmount state for debugging
   useEffect(() => {
-    console.log("VideoPlayer: Component MOUNTED with URL:", videoUrl);
-    console.log("VideoPlayer: videoRef exists?", !!videoRef.current);
+    console.log(`[VideoPlayer:${playerLogId.current}] 🔄 COMPONENT MOUNTED with URL:`, videoUrl);
+    console.log(`[VideoPlayer:${playerLogId.current}] Video element reference exists:`, !!videoRef.current);
     
     mountedRef.current = true;
     safeToLoadRef.current = false;
     
     return () => {
-      console.log("VideoPlayer: Component UNMOUNTED");
+      console.log(`[VideoPlayer:${playerLogId.current}] 🛑 COMPONENT UNMOUNTED`);
       mountedRef.current = false;
       safeToLoadRef.current = false;
     };
@@ -55,12 +56,14 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   
   // Check if video ref is available immediately after mount
   useEffect(() => {
-    console.log("VideoPlayer: Initial mount effect with URL:", videoUrl);
+    console.log(`[VideoPlayer:${playerLogId.current}] ⚙️ Initial mount effect with URL:`, videoUrl);
+    console.time(`[VideoPlayer:${playerLogId.current}] Total video load and play time`);
     
     mountedRef.current = true;
-    console.log("VideoPlayer mounted with URL:", videoUrl);
+    console.log(`[VideoPlayer:${playerLogId.current}] Mounted state set to true`);
     
     // Reset state on new video URL
+    console.log(`[VideoPlayer:${playerLogId.current}] Resetting player state for new URL`);
     setErrorLoading(false);
     setIsLoading(true);
     loadAttemptRef.current = 0;
@@ -69,33 +72,44 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     
     // Process the URL first - This is important for Supabase URLs
     const cleanedUrl = videoUrl.trim().replace(/\n/g, '');
-    console.log("VideoPlayer: Processing URL:", cleanedUrl);
+    console.log(`[VideoPlayer:${playerLogId.current}] Processing URL [length: ${cleanedUrl.length}]`);
+    console.log(`[VideoPlayer:${playerLogId.current}] URL before validation: ${cleanedUrl.substring(0, 100)}${cleanedUrl.length > 100 ? '...' : ''}`);
     
     // Use thorough validation to ensure URL is playable
+    console.time(`[VideoPlayer:${playerLogId.current}] URL validation time`);
     const validatedUrl = validateVideoUrl(cleanedUrl, true);
-    console.log("VideoPlayer: Validated URL:", validatedUrl || "(validation failed)");
+    console.timeEnd(`[VideoPlayer:${playerLogId.current}] URL validation time`);
+    
+    if (validatedUrl) {
+      console.log(`[VideoPlayer:${playerLogId.current}] ✅ URL validated successfully`);
+      console.log(`[VideoPlayer:${playerLogId.current}] URL after validation: ${validatedUrl.substring(0, 100)}${validatedUrl.length > 100 ? '...' : ''}`);
+    } else {
+      console.error(`[VideoPlayer:${playerLogId.current}] ❌ URL validation failed`);
+    }
     
     setProcessedUrl(validatedUrl || cleanedUrl);
     processingUrlRef.current = false;
     
     if (!validatedUrl) {
-      setErrorDetails(`URL validation failed: ${cleanedUrl}`);
+      setErrorDetails(`URL validation failed: ${cleanedUrl.substring(0, 50)}...`);
     }
     
     // Small delay to ensure DOM is fully rendered before checking ref
+    console.log(`[VideoPlayer:${playerLogId.current}] Setting timeout to check video element reference`);
     const initTimer = setTimeout(() => {
       if (videoRef.current) {
-        console.log("VideoPlayer: Video element reference is ready");
+        console.log(`[VideoPlayer:${playerLogId.current}] ✅ Video element reference is ready`);
         setIsRefReady(true);
         safeToLoadRef.current = true;
       } else {
-        console.error("VideoPlayer: Video element reference is still null after init");
+        console.error(`[VideoPlayer:${playerLogId.current}] ❌ Video element reference is still null after init`);
         safeToLoadRef.current = false;
       }
     }, 100);
     
     return () => {
-      console.log("VideoPlayer unmounting, last URL was:", videoUrl);
+      console.log(`[VideoPlayer:${playerLogId.current}] Unmounting, last URL was: ${videoUrl.substring(0, 50)}${videoUrl.length > 50 ? '...' : ''}`);
+      console.timeEnd(`[VideoPlayer:${playerLogId.current}] Total video load and play time`);
       mountedRef.current = false;
       safeToLoadRef.current = false;
       clearTimeout(initTimer);
@@ -104,7 +118,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
   // Main effect to load and play video once we know ref is ready
   useEffect(() => {
-    console.log("VideoPlayer: Load effect triggered. Conditions:", {
+    console.log(`[VideoPlayer:${playerLogId.current}] Load effect triggered. Conditions:`, {
       mounted: mountedRef.current,
       url: !!processedUrl,
       refReady: isRefReady,
@@ -114,11 +128,12 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     });
     
     if (!mountedRef.current || !processedUrl || !isRefReady || !videoRef.current || !safeToLoadRef.current || processingUrlRef.current) {
-      console.log("VideoPlayer: Skipping load - component not mounted, no URL, video element not ready, or URL is still being processed");
+      console.log(`[VideoPlayer:${playerLogId.current}] ⚠️ Skipping load - preconditions not met`);
       return;
     }
     
-    console.log("VideoPlayer: Loading new video URL with ready ref:", processedUrl);
+    console.log(`[VideoPlayer:${playerLogId.current}] 🎬 LOADING VIDEO with URL: ${processedUrl.substring(0, 80)}...`);
+    console.time(`[VideoPlayer:${playerLogId.current}] Video load operation`);
     
     setErrorLoading(false);
     setIsLoading(true);
@@ -126,64 +141,81 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     
     const videoElement = videoRef.current;
     videoElement.muted = isMuted;
+    console.log(`[VideoPlayer:${playerLogId.current}] Video muted state:`, isMuted);
     
     try {
-      console.log("VideoPlayer: Setting video src and loading...");
+      console.log(`[VideoPlayer:${playerLogId.current}] Setting video source and calling load()`);
       
       // Add cache busting parameter to prevent caching issues
       const cacheBuster = `cb=${Date.now()}`;
       const urlWithCache = processedUrl.includes('?') 
         ? `${processedUrl}&${cacheBuster}`  
         : `${processedUrl}?${cacheBuster}`;
-        
+      
+      console.log(`[VideoPlayer:${playerLogId.current}] Final URL with cache buster: ${urlWithCache.substring(0, 80)}...`);  
       videoElement.src = urlWithCache;
+      
+      console.log(`[VideoPlayer:${playerLogId.current}] Calling load() method on video element`);
       videoElement.load();
-      console.log("VideoPlayer: Video src set and load() called with:", urlWithCache);
+      console.log(`[VideoPlayer:${playerLogId.current}] load() method called`);
       
       // Set a timeout to detect stalled loading
+      console.log(`[VideoPlayer:${playerLogId.current}] Setting 15-second timeout for load operation`);
       const loadTimeout = setTimeout(() => {
         if (isLoading && mountedRef.current) {
-          console.warn("VideoPlayer: Loading timed out after 15 seconds");
+          console.warn(`[VideoPlayer:${playerLogId.current}] ⏱️ Loading TIMED OUT after 15 seconds`);
           if (!errorLoading) {
+            console.log(`[VideoPlayer:${playerLogId.current}] Triggering error handler due to timeout`);
             handleVideoError();
           }
         }
       }, 15000);
       
       return () => {
+        console.log(`[VideoPlayer:${playerLogId.current}] Cleaning up load effect, clearing timeout`);
         clearTimeout(loadTimeout);
       };
     } catch (e) {
-      console.error("VideoPlayer: Error setting source or loading:", e);
+      console.error(`[VideoPlayer:${playerLogId.current}] ❌ Error setting source or loading:`, e);
+      console.timeEnd(`[VideoPlayer:${playerLogId.current}] Video load operation`);
       setErrorLoading(true);
       setIsLoading(false);
       setErrorDetails(e instanceof Error ? e.message : "Unknown error setting video source");
-      if (onError) onError();
+      if (onError) {
+        console.log(`[VideoPlayer:${playerLogId.current}] Calling onError callback due to load exception`);
+        onError();
+      }
       return;
     }
   }, [processedUrl, onError, isMuted, isRefReady, isLoading]);
 
   useEffect(() => {
     // Skip if not mounted or no video element
-    if (!mountedRef.current || !videoRef.current) return;
+    if (!mountedRef.current || !videoRef.current) {
+      console.log(`[VideoPlayer:${playerLogId.current}] Skipping media event listeners setup - component not mounted or no video element`);
+      return;
+    }
     
     const videoElement = videoRef.current;
     
     const handleLoadedMetadata = () => {
       if (!mountedRef.current) return;
       
-      console.log("VideoPlayer: Video metadata loaded successfully");
+      console.log(`[VideoPlayer:${playerLogId.current}] ✅ Video metadata loaded successfully`);
+      console.timeEnd(`[VideoPlayer:${playerLogId.current}] Video load operation`);
       
       try {
         const isPortrait = videoElement.videoHeight > videoElement.videoWidth;
         setIsVertical(isPortrait);
-        console.log("VideoPlayer: Video dimensions", {
+        console.log(`[VideoPlayer:${playerLogId.current}] Video dimensions detected:`, {
           width: videoElement.videoWidth,
           height: videoElement.videoHeight,
-          isPortrait
+          isPortrait,
+          duration: videoElement.duration,
+          readyState: videoElement.readyState
         });
       } catch (e) {
-        console.error("VideoPlayer: Error determining video orientation:", e);
+        console.error(`[VideoPlayer:${playerLogId.current}] Error determining video dimensions:`, e);
       }
       
       setIsLoading(false);
@@ -191,14 +223,18 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       // Only attempt to play if we haven't already tried
       if (!playAttemptRef.current) {
         playAttemptRef.current = true;
-        console.log("VideoPlayer: Attempting to play video...");
+        console.log(`[VideoPlayer:${playerLogId.current}] 🎬 Attempting to play video...`);
+        console.time(`[VideoPlayer:${playerLogId.current}] Video play attempt`);
         
         // Small delay before playing to allow for metadata processing
         setTimeout(() => {
           if (videoElement && mountedRef.current) {
+            console.log(`[VideoPlayer:${playerLogId.current}] Calling play() method on video element`);
             videoElement.play()
               .then(() => {
-                console.log("VideoPlayer: Video started playing successfully");
+                console.log(`[VideoPlayer:${playerLogId.current}] ✅ Video started playing successfully`);
+                console.timeEnd(`[VideoPlayer:${playerLogId.current}] Video play attempt`);
+                
                 toast({
                   title: "Video playback started",
                   description: videoName || "Video is now playing",
@@ -206,15 +242,21 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
                 });
               })
               .catch(err => {
-                console.error("VideoPlayer: Error playing video:", err);
+                console.error(`[VideoPlayer:${playerLogId.current}] ❌ Error playing video:`, err);
+                console.timeEnd(`[VideoPlayer:${playerLogId.current}] Video play attempt`);
+                
                 if (mountedRef.current) {
                   // Don't set error state for autoplay errors - these are expected on mobile
                   if (err.name === "NotAllowedError") {
-                    console.log("VideoPlayer: Autoplay blocked, user needs to click play");
+                    console.log(`[VideoPlayer:${playerLogId.current}] Autoplay was blocked by browser, user needs to click play manually`);
                   } else {
+                    console.log(`[VideoPlayer:${playerLogId.current}] Setting error state due to play() rejection`);
                     setErrorLoading(true);
                     setErrorDetails(err instanceof Error ? err.message : "Unknown error playing video");
-                    if (onError) onError();
+                    if (onError) {
+                      console.log(`[VideoPlayer:${playerLogId.current}] Calling onError callback due to play failure`);
+                      onError();
+                    }
                   }
                 }
               });
@@ -224,12 +266,16 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     };
     
     const handleLoadError = (e: Event) => {
-      console.error("VideoPlayer: Video failed to load event triggered:", e);
+      console.error(`[VideoPlayer:${playerLogId.current}] ❌ Video failed to load event triggered:`, e);
+      console.timeEnd(`[VideoPlayer:${playerLogId.current}] Video load operation`);
       
       let errorMsg = "Unknown error";
       
       if (videoElement.error) {
         // Map error codes to more helpful messages
+        console.log(`[VideoPlayer:${playerLogId.current}] Video error code:`, videoElement.error.code);
+        console.log(`[VideoPlayer:${playerLogId.current}] Video error message:`, videoElement.error.message);
+        
         switch(videoElement.error.code) {
           case 1: // MEDIA_ERR_ABORTED
             errorMsg = "Video playback aborted";
@@ -248,34 +294,91 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         }
       }
       
+      console.log(`[VideoPlayer:${playerLogId.current}] Setting error details:`, errorMsg);
       setErrorDetails(errorMsg);
       handleVideoError();
     };
     
     const handleStalled = () => {
-      console.warn("VideoPlayer: Video playback stalled");
+      console.warn(`[VideoPlayer:${playerLogId.current}] ⚠️ Video playback STALLED`);
+      console.log(`[VideoPlayer:${playerLogId.current}] Video network state:`, videoElement.networkState);
+      console.log(`[VideoPlayer:${playerLogId.current}] Video ready state:`, videoElement.readyState);
+      
       // Only handle if we're still in loading state to avoid interrupting playback
       if (isLoading && mountedRef.current) {
-        console.warn("VideoPlayer: Stalled during initial loading, attempting recovery");
+        console.warn(`[VideoPlayer:${playerLogId.current}] Stalled during initial loading, attempting recovery`);
         handleVideoError();
       }
     };
     
+    const handleTimeUpdate = () => {
+      // Only log occasionally to avoid flooding the console
+      if (videoElement.currentTime % 5 < 0.1) { // Log roughly every 5 seconds
+        console.log(`[VideoPlayer:${playerLogId.current}] Video playback progress: ${Math.round(videoElement.currentTime)}s / ${Math.round(videoElement.duration)}s`);
+      }
+    };
+    
+    const handlePlay = () => {
+      console.log(`[VideoPlayer:${playerLogId.current}] ▶️ Video PLAY event`);
+    };
+    
+    const handlePause = () => {
+      console.log(`[VideoPlayer:${playerLogId.current}] ⏸️ Video PAUSE event`);
+    };
+    
+    const handleSeeking = () => {
+      console.log(`[VideoPlayer:${playerLogId.current}] 🔍 Video SEEKING to ${videoElement.currentTime}s`);
+    };
+    
+    const handleVolumeChange = () => {
+      console.log(`[VideoPlayer:${playerLogId.current}] 🔊 Volume changed: ${videoElement.volume}, muted: ${videoElement.muted}`);
+    };
+    
+    const handleWaiting = () => {
+      console.log(`[VideoPlayer:${playerLogId.current}] ⌛ Video WAITING/BUFFERING`);
+    };
+    
+    const handleCanPlay = () => {
+      console.log(`[VideoPlayer:${playerLogId.current}] ✅ Video CAN PLAY event (enough data to start playback)`);
+    };
+    
+    console.log(`[VideoPlayer:${playerLogId.current}] Setting up video element event listeners`);
+    
+    // Basic loading events
     videoElement.addEventListener('loadedmetadata', handleLoadedMetadata);
     videoElement.addEventListener('error', handleLoadError);
     videoElement.addEventListener('stalled', handleStalled);
+    videoElement.addEventListener('canplay', handleCanPlay);
+    videoElement.addEventListener('waiting', handleWaiting);
+    
+    // Playback state events
+    videoElement.addEventListener('play', handlePlay);
+    videoElement.addEventListener('pause', handlePause);
+    videoElement.addEventListener('timeupdate', handleTimeUpdate);
+    videoElement.addEventListener('seeking', handleSeeking);
+    videoElement.addEventListener('volumechange', handleVolumeChange);
     
     return () => {
+      console.log(`[VideoPlayer:${playerLogId.current}] Removing video element event listeners`);
+      
+      // Clean up all event listeners
       videoElement.removeEventListener('loadedmetadata', handleLoadedMetadata);
       videoElement.removeEventListener('error', handleLoadError);
       videoElement.removeEventListener('stalled', handleStalled);
+      videoElement.removeEventListener('canplay', handleCanPlay);
+      videoElement.removeEventListener('waiting', handleWaiting);
+      videoElement.removeEventListener('play', handlePlay);
+      videoElement.removeEventListener('pause', handlePause);
+      videoElement.removeEventListener('timeupdate', handleTimeUpdate);
+      videoElement.removeEventListener('seeking', handleSeeking);
+      videoElement.removeEventListener('volumechange', handleVolumeChange);
     };
   }, [videoName, toast, onError, processedUrl, isLoading]);
 
   const handleVideoError = () => {
     if (!mountedRef.current) return;
     
-    console.error("VideoPlayer: Video failed to load:", processedUrl);
+    console.error(`[VideoPlayer:${playerLogId.current}] ❌ Video failed to load: ${processedUrl.substring(0, 50)}...`);
     const currentAttempt = loadAttemptRef.current;
     
     setErrorLoading(true);
@@ -293,7 +396,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       const fixedUrl = processedUrl.replace('//storage/v1/object/public/', '/storage/v1/object/public/')
                                     .replace('//videos//', '/videos/');
       
-      console.log("VideoPlayer: Detected double slash issue, trying with fixed URL:", fixedUrl);
+      console.log(`[VideoPlayer:${playerLogId.current}] 🔧 Detected double slash issue, trying with fixed URL: ${fixedUrl.substring(0, 50)}...`);
       loadAttemptRef.current += 1;
       setProcessedUrl(fixedUrl);
       
@@ -311,7 +414,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       // Re-validate with thorough option and try again
       const thoroughlyValidatedUrl = validateVideoUrl(processedUrl, true);
       if (thoroughlyValidatedUrl && thoroughlyValidatedUrl !== processedUrl) {
-        console.log("VideoPlayer: Trying with more thoroughly validated URL:", thoroughlyValidatedUrl);
+        console.log(`[VideoPlayer:${playerLogId.current}] 🔄 Retry with more thoroughly validated URL: ${thoroughlyValidatedUrl.substring(0, 50)}...`);
         loadAttemptRef.current += 1;
         setProcessedUrl(thoroughlyValidatedUrl);
         
@@ -328,10 +431,10 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     // If we're still having issues, try one more time with a cache-buster
     if (currentAttempt < 2) {
       loadAttemptRef.current += 1;
-      console.log(`VideoPlayer: Retry attempt ${loadAttemptRef.current} scheduled`);
+      console.log(`[VideoPlayer:${playerLogId.current}] 🔄 Retry attempt ${loadAttemptRef.current} scheduled`);
       setTimeout(retryLoading, 2000);
     } else if (onError) {
-      console.log("VideoPlayer: Max retries reached, calling onError");
+      console.log(`[VideoPlayer:${playerLogId.current}] ❌ Max retries reached, calling onError`);
       
       toast({
         title: "Video playback failed",
@@ -347,7 +450,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const retryLoading = () => {
     if (!mountedRef.current || !videoRef.current) return;
     
-    console.log("VideoPlayer: Retrying video load:", processedUrl);
+    console.log(`[VideoPlayer:${playerLogId.current}] 🔄 RETRYING video load: ${processedUrl.substring(0, 50)}...`);
     setErrorLoading(false);
     setIsLoading(true);
     setLoadCount(prev => prev + 1);
@@ -361,8 +464,10 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         ? `${processedUrl}&${cacheBuster}`
         : `${processedUrl}?${cacheBuster}`;
       
-      console.log("VideoPlayer: Retrying with cache buster:", urlWithCacheBuster);
+      console.log(`[VideoPlayer:${playerLogId.current}] Retrying with cache buster: ${urlWithCacheBuster.substring(0, 80)}...`);
       videoRef.current.src = urlWithCacheBuster;
+      
+      console.log(`[VideoPlayer:${playerLogId.current}] Calling load() method for retry`);
       videoRef.current.load();
       
       toast({
@@ -371,24 +476,28 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         duration: 3000,
       });
     } catch (e) {
-      console.error("VideoPlayer: Error during retry:", e);
+      console.error(`[VideoPlayer:${playerLogId.current}] ❌ Error during retry:`, e);
       setErrorLoading(true);
       setIsLoading(false);
       setErrorDetails(e instanceof Error ? e.message : "Error during retry attempt");
-      if (onError) onError();
+      if (onError) {
+        console.log(`[VideoPlayer:${playerLogId.current}] Calling onError callback due to retry exception`);
+        onError();
+      }
     }
   };
 
   // Try a direct link when other methods fail
   const openInNewTab = () => {
+    console.log(`[VideoPlayer:${playerLogId.current}] Opening video in new tab: ${processedUrl.substring(0, 50)}...`);
     window.open(processedUrl, '_blank');
   };
 
   const toggleMute = () => {
+    console.log(`[VideoPlayer:${playerLogId.current}] Toggling mute state from ${isMuted} to ${!isMuted}`);
     setIsMuted(!isMuted);
     if (videoRef.current) {
       videoRef.current.muted = !isMuted;
-      console.log("VideoPlayer: Mute toggled to:", !isMuted);
     }
   };
 
@@ -399,18 +508,25 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       readyState: videoRef.current.readyState,
       networkState: videoRef.current.networkState,
       error: videoRef.current.error ? videoRef.current.error.code : null,
+      errorMessage: videoRef.current.error ? videoRef.current.error.message : null,
       srcSet: !!videoRef.current.src,
       actualSrc: videoRef.current.src,
       loadAttempts: loadCount,
       processedUrl,
-      originalUrl: videoUrl
+      originalUrl: videoUrl,
+      currentTime: videoRef.current.currentTime,
+      duration: videoRef.current.duration,
+      paused: videoRef.current.paused,
+      ended: videoRef.current.ended,
+      muted: videoRef.current.muted,
+      volume: videoRef.current.volume
     };
   };
 
   // Log debug info when video errors
   useEffect(() => {
     if (errorLoading) {
-      console.error("VideoPlayer Debug Info:", videoDebugInfo());
+      console.error(`[VideoPlayer:${playerLogId.current}] 📊 VIDEO DEBUG INFO:`, videoDebugInfo());
     }
   }, [errorLoading, videoUrl]);
 
@@ -488,8 +604,11 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
               isVertical ? "max-w-[80%] max-h-[65vh] object-contain" : "w-full"
             )}
             onEnded={() => {
-              console.log("VideoPlayer: Video playback ended");
-              if (onEnded) onEnded();
+              console.log(`[VideoPlayer:${playerLogId.current}] 🏁 Video playback ENDED`);
+              if (onEnded) {
+                console.log(`[VideoPlayer:${playerLogId.current}] Calling onEnded callback`);
+                onEnded();
+              }
             }}
             onError={handleVideoError}
             preload="metadata"

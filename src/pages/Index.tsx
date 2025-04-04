@@ -45,9 +45,10 @@ const Index = () => {
   const buttonRef = useRef<HTMLDivElement | null>(null);
   const buttonManagerRef = useRef<VapiButtonManager | null>(null);
   const isInitializedRef = useRef(false);
+  const sessionId = useRef(`session-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`);
 
   const addDebugLog = (message: string) => {
-    console.log(`[DEBUG] ${message}`);
+    console.log(`[DEBUG:${sessionId.current}] ${message}`);
   };
 
   const activateRecording = () => {
@@ -71,7 +72,7 @@ const Index = () => {
         addDebugLog("Initialized empty voice input history in localStorage");
       }
     } catch (e) {
-      console.error('Error initializing voice input history:', e);
+      console.error(`[DEBUG:${sessionId.current}] Error initializing voice input history:`, e);
     }
   };
 
@@ -105,7 +106,7 @@ const Index = () => {
     // Handle button state changes
     buttonManagerRef.current.onStateChange((state) => {
       const shouldBeActive = buttonManagerRef.current?.shouldRecordingBeActive();
-      addDebugLog(`Button state changed. Should recording be active: ${shouldBeActive}`);
+      addDebugLog(`Button state changed. Should recording be active: ${shouldBeActive}, Current state: ${JSON.stringify(state)}`);
       
       if (shouldBeActive && !isRecordingActive) {
         activateRecording();
@@ -117,12 +118,14 @@ const Index = () => {
     });
     
     // Start monitoring
+    addDebugLog("Starting button state monitoring");
     buttonManagerRef.current.startMonitoring();
     
     isInitializedRef.current = true;
     
     // Clean up on unmount
     return () => {
+      addDebugLog("Stopping button state monitoring due to component unmount");
       if (buttonManagerRef.current) {
         buttonManagerRef.current.stopMonitoring();
       }
@@ -130,13 +133,15 @@ const Index = () => {
   }, [isRecordingActive]);
 
   useEffect(() => {
-    console.log("Index component mounted");
+    console.log(`[Index:${sessionId.current}] 🚀 Component mounted - initializing voice assistant`);
     addDebugLog("Component mounted - initializing voice assistant");
     
+    addDebugLog("Resetting video loading state");
     resetVideoLoadingState();
     
     const assistant = "607959b0-89a1-482a-ad03-66a7c86327e1";
     const apiKey = "87657dc4-df36-4fa4-b292-0a60d40d43e4";
+    addDebugLog(`Using assistant ID: ${assistant.substring(0, 8)}...`);
     
     const buttonConfig = {
       button: {
@@ -153,35 +158,39 @@ const Index = () => {
         textColor: '#FFFFFF'
       }
     };
+    addDebugLog("Button config set up");
 
     const script = document.createElement('script');
     script.src = "https://cdn.jsdelivr.net/gh/VapiAI/html-script-tag@latest/dist/assets/index.js";
     script.defer = true;
     script.async = true;
+    addDebugLog(`Adding Vapi script to DOM: ${script.src}`);
     document.body.appendChild(script);
 
     // Periodically clear stale locks for system health
+    addDebugLog("Setting up stale lock cleanup interval");
     const staleLockCleanupInterval = setInterval(() => {
+      addDebugLog("Clearing stale locks");
       clearStaleLocks();
     }, 60000); // Every minute
 
     script.onload = function () {
-      addDebugLog("Vapi script loaded");
+      addDebugLog("✅ Vapi script loaded successfully");
       if (window.vapiSDK) {
-        addDebugLog("Vapi SDK detected");
+        addDebugLog("Vapi SDK detected in window object");
         
         const handleMessage = (message: any) => {
-          console.log("Message from Vapi:", message);
+          console.log(`[Index:${sessionId.current}] 📩 Message from Vapi:`, message);
           addDebugLog(`Received AI message: ${JSON.stringify(message).substring(0, 100)}...`);
           
           const messageText = message.text || message.content;
           if (!messageText) {
-            console.warn("Received empty message from Vapi");
+            console.warn(`[Index:${sessionId.current}] ⚠️ Received empty message from Vapi`);
             addDebugLog("Warning: Empty message received from Vapi");
             return;
           }
           
-          console.log("Dispatching vapi_message event with text:", messageText);
+          console.log(`[Index:${sessionId.current}] Dispatching vapi_message event with text:`, messageText);
           addDebugLog(`Dispatching message event with text: ${messageText.substring(0, 50)}...`);
           
           window.dispatchEvent(new CustomEvent('vapi_message', {
@@ -199,12 +208,12 @@ const Index = () => {
         };
         
         const handleVoiceInput = (input: any) => {
-          console.log("Voice input received:", input);
+          console.log(`[Index:${sessionId.current}] 🎙️ Voice input received:`, input);
           addDebugLog(`Voice input received: ${input ? JSON.stringify(input).substring(0, 70) : 'empty'}...`);
           setIsRecordingActive(true);
           
           if (input && input.transcript) {
-            console.log("Voice transcript:", input.transcript);
+            console.log(`[Index:${sessionId.current}] Voice transcript:`, input.transcript);
             addDebugLog(`Transcript content: "${input.transcript.substring(0, 50)}..."`);
             
             window.dispatchEvent(new CustomEvent('voice_input', {
@@ -225,10 +234,10 @@ const Index = () => {
                 JSON.stringify([newVoiceInput, ...savedInputs].slice(0, 50))
               );
               
-              console.log("Saved voice input to localStorage:", newVoiceInput);
+              console.log(`[Index:${sessionId.current}] Saved voice input to localStorage:`, newVoiceInput);
               addDebugLog(`Saved to localStorage: "${input.transcript.substring(0, 40)}..."`);
             } catch (e) {
-              console.error('Error saving voice input to localStorage:', e);
+              console.error(`[Index:${sessionId.current}] Error saving voice input to localStorage:`, e);
               addDebugLog(`Error saving to localStorage: ${e}`);
             }
             
@@ -241,13 +250,13 @@ const Index = () => {
         };
         
         const handleStateChange = (state: any) => {
-          console.log("Vapi state changed:", state);
+          console.log(`[Index:${sessionId.current}] Vapi state changed:`, state);
           addDebugLog(`State change: ${state ? JSON.stringify(state).substring(0, 100) : 'null'}...`);
           
           if (state && state.status) {
             if (state.status === 'connecting' || state.status === 'connected') {
               setIsRecordingActive(true);
-              console.log("Voice recording activated");
+              console.log(`[Index:${sessionId.current}] Voice recording activated`);
               addDebugLog(`Recording ACTIVATED (status: ${state.status})`);
               
               window.dispatchEvent(new CustomEvent('recording_status_change', {
@@ -261,7 +270,7 @@ const Index = () => {
               });
             } else if (state.status === 'disconnected' || state.status === 'error' || state.status === 'inactive') {
               setIsRecordingActive(false);
-              console.log("Voice recording deactivated");
+              console.log(`[Index:${sessionId.current}] Voice recording deactivated`);
               addDebugLog(`Recording DEACTIVATED (status: ${state.status})`);
               
               window.dispatchEvent(new CustomEvent('recording_status_change', {
@@ -280,7 +289,7 @@ const Index = () => {
         if (!hasShownWelcomeMessage.current) {
           hasShownWelcomeMessage.current = true;
           setTimeout(() => {
-            console.log("Dispatching initial welcome message - ONE TIME ONLY");
+            console.log(`[Index:${sessionId.current}] Dispatching initial welcome message - ONE TIME ONLY`);
             addDebugLog("Dispatching welcome message");
             const welcomeMessage = "Welcome to WhatsApp AI Assistant. Ask me about quick replies, message templates, or other WhatsApp Business features.";
             
@@ -317,20 +326,21 @@ const Index = () => {
               config: customConfig
             });
             window.vapiInstance = vapiInstanceRef.current;
-            console.log("Vapi instance initialized", vapiInstanceRef.current);
+            console.log(`[Index:${sessionId.current}] ✅ Vapi instance initialized`, vapiInstanceRef.current);
             addDebugLog("Vapi instance initialized successfully");
           } catch (error) {
-            console.error("Failed to initialize Vapi:", error);
+            console.error(`[Index:${sessionId.current}] Failed to initialize Vapi:`, error);
             addDebugLog(`Vapi initialization error: ${error}`);
           }
         }
       } else {
         addDebugLog("ERROR: Vapi SDK not found after script load");
+        console.error(`[Index:${sessionId.current}] ❌ Vapi SDK not found in window object after script load`);
       }
     };
 
     script.onerror = function() {
-      console.error("Failed to load Vapi script");
+      console.error(`[Index:${sessionId.current}] ❌ Failed to load Vapi script`);
       addDebugLog("ERROR: Failed to load Vapi script");
       toast({
         variant: "destructive",
@@ -343,11 +353,14 @@ const Index = () => {
     return () => {
       clearInterval(staleLockCleanupInterval);
       if (vapiInstanceRef.current && vapiInstanceRef.current.destroy) {
+        addDebugLog("Destroying Vapi instance during cleanup");
         vapiInstanceRef.current.destroy();
       }
       if (document.body.contains(script)) {
+        addDebugLog("Removing Vapi script from DOM");
         document.body.removeChild(script);
       }
+      addDebugLog("Resetting video loading state during cleanup");
       resetVideoLoadingState();
     };
   }, [toast]);
