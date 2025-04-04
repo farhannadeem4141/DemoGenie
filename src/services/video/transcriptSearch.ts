@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { validateVideoUrl } from "./videoUrlValidator";
 import { validateSearchKeyword, isNewTranscript } from "@/utils/videoLoadingManager";
@@ -14,21 +15,18 @@ export const fetchVideos = async (): Promise<string[]> => {
     // Get text from local storage
     const storedText = localStorage.getItem("transcript") || "";
     if (!storedText) {
-      console.warn("No transcript found in local storage");
+      console.warn("[TRANSCRIPT-SEARCH] No transcript found in local storage");
       return [];
     }
 
-    console.log("Transcript Search - Raw transcript:", storedText);
+    console.log("[TRANSCRIPT-SEARCH] Raw transcript:", storedText);
 
-    // Check if this is a duplicate transcript we've already processed
-    if (!isNewTranscript(storedText)) {
-      console.log("Transcript Search - Skipping duplicate transcript");
-      return [];
-    }
-
+    // Don't skip similar transcripts for basic fetch
+    // We want to make sure we attempt to return videos even for similar transcripts
+    
     // Clean the transcript - remove duplicate words
     const cleanedText = cleanTranscript(storedText);
-    console.log("Transcript Search - Cleaned transcript:", cleanedText);
+    console.log("[TRANSCRIPT-SEARCH] Cleaned transcript:", cleanedText);
 
     // Extract keywords (splitting by space for simplicity)
     const keywords = cleanedText.split(" ")
@@ -36,11 +34,11 @@ export const fetchVideos = async (): Promise<string[]> => {
       .slice(0, 3); // Pick first 3 substantial words
     
     if (keywords.length === 0) {
-      console.warn("No valid keywords found in transcript");
+      console.warn("[TRANSCRIPT-SEARCH] No valid keywords found in transcript");
       return [];
     }
     
-    console.log("Extracted Keywords:", keywords);
+    console.log("[TRANSCRIPT-SEARCH] Extracted Keywords:", keywords);
     
     // Validate keywords before search
     const validatedKeywords = keywords
@@ -48,11 +46,11 @@ export const fetchVideos = async (): Promise<string[]> => {
       .filter(Boolean) as string[];
       
     if (validatedKeywords.length === 0) {
-      console.warn("No valid keywords after validation");
+      console.warn("[TRANSCRIPT-SEARCH] No valid keywords after validation");
       return [];
     }
     
-    console.log("Validated Keywords:", validatedKeywords);
+    console.log("[TRANSCRIPT-SEARCH] Validated Keywords:", validatedKeywords);
 
     // Query Supabase with more flexible matching
     const { data, error } = await supabase
@@ -65,12 +63,12 @@ export const fetchVideos = async (): Promise<string[]> => {
       );
 
     if (error) {
-      console.error("Error fetching videos:", error);
+      console.error("[TRANSCRIPT-SEARCH] Error fetching videos:", error);
       return [];
     }
 
     if (!data || data.length === 0) {
-      console.log("No videos found matching keywords:", validatedKeywords);
+      console.log("[TRANSCRIPT-SEARCH] No videos found matching keywords:", validatedKeywords);
       return [];
     }
 
@@ -79,10 +77,10 @@ export const fetchVideos = async (): Promise<string[]> => {
       .map((video) => validateVideoUrl(video.video_url))
       .filter(url => !!url); // Filter out invalid URLs
       
-    console.log("Fetched and validated Video URLs:", videoUrls);
+    console.log("[TRANSCRIPT-SEARCH] Fetched and validated Video URLs:", videoUrls);
     return videoUrls;
   } catch (error) {
-    console.error("Unexpected error:", error);
+    console.error("[TRANSCRIPT-SEARCH] Unexpected error:", error);
     return [];
   }
 };
@@ -113,29 +111,25 @@ export const fetchVideosWithDetails = async (): Promise<TranscriptSearchResult> 
     // Get text from local storage
     const storedText = localStorage.getItem("transcript") || "";
     if (!storedText) {
-      console.warn("No transcript found in local storage");
+      console.warn("[TRANSCRIPT-SEARCH] No transcript found in local storage");
       return { videos: [], success: false, error: "No transcript text found in local storage" };
     }
 
-    console.log("Transcript Search: Using transcript:", storedText);
+    console.log("[TRANSCRIPT-SEARCH] Using transcript:", storedText);
     
-    // Check if this is a duplicate transcript we've already processed
-    // Using a less strict check to allow similar but not identical transcripts
-    if (!isNewTranscript(storedText)) {
-      console.log("Transcript Search - Processed similar transcript recently");
-      return { videos: [], success: false, error: "Similar transcript recently processed" };
-    }
-
+    // Always process transcript for fetchVideosWithDetails
+    // We want detailed video search to always attempt to find something
+    
     // Clean the transcript - remove duplicate words
     const cleanedText = cleanTranscript(storedText);
-    console.log("Transcript Search - Cleaned transcript:", cleanedText);
+    console.log("[TRANSCRIPT-SEARCH] Cleaned transcript:", cleanedText);
 
     // Extract keywords (splitting by space for simplicity)
     const keywords = cleanedText.split(" ")
       .filter(word => word.trim().length >= 3) // Only use words with 3+ characters
       .slice(0, 3); // Pick first 3 substantial words
     
-    console.log("Transcript Search: Extracted Keywords:", keywords);
+    console.log("[TRANSCRIPT-SEARCH] Extracted Keywords:", keywords);
     
     // Check for special keywords that should take priority
     const priorityKeywords = ["quick", "replies", "business", "whatsapp", "template"];
@@ -147,7 +141,7 @@ export const fetchVideosWithDetails = async (): Promise<TranscriptSearchResult> 
     const keywordsToUse = foundPriorityKeywords.length > 0 ? 
       foundPriorityKeywords : keywords;
       
-    console.log("Transcript Search: Using keywords:", keywordsToUse);
+    console.log("[TRANSCRIPT-SEARCH] Using keywords:", keywordsToUse);
     
     // Validate keywords before search
     const validatedKeywords = keywordsToUse
@@ -155,14 +149,26 @@ export const fetchVideosWithDetails = async (): Promise<TranscriptSearchResult> 
       .filter(Boolean) as string[];
       
     if (validatedKeywords.length === 0) {
-      return { 
-        videos: [], 
-        success: false, 
-        error: "No valid keywords extracted from transcript" 
-      };
+      // Even if no validated keywords, try using the first word of the transcript as fallback
+      const firstWord = storedText.split(' ')[0];
+      if (firstWord && firstWord.length >= 2) {
+        const fallbackKeyword = validateSearchKeyword(firstWord);
+        if (fallbackKeyword) {
+          validatedKeywords.push(fallbackKeyword);
+          console.log("[TRANSCRIPT-SEARCH] Using fallback keyword:", fallbackKeyword);
+        }
+      }
+      
+      if (validatedKeywords.length === 0) {
+        return { 
+          videos: [], 
+          success: false, 
+          error: "No valid keywords extracted from transcript" 
+        };
+      }
     }
     
-    console.log("Transcript Search: Validated Keywords:", validatedKeywords);
+    console.log("[TRANSCRIPT-SEARCH] Validated Keywords:", validatedKeywords);
 
     // Build more flexible query conditions to improve matches
     const conditions: string[] = [];
@@ -186,7 +192,7 @@ export const fetchVideosWithDetails = async (): Promise<TranscriptSearchResult> 
     }
     
     const queryConditions = conditions.join(",");
-    console.log("Transcript Search: Query conditions:", queryConditions);
+    console.log("[TRANSCRIPT-SEARCH] Query conditions:", queryConditions);
 
     // Query Supabase with more flexible matching
     const { data, error } = await supabase
@@ -195,32 +201,29 @@ export const fetchVideosWithDetails = async (): Promise<TranscriptSearchResult> 
       .or(queryConditions);
 
     if (error) {
-      console.error("Transcript Search: Database error:", error);
+      console.error("[TRANSCRIPT-SEARCH] Database error:", error);
       return { videos: [], success: false, error: `Database error: ${error.message}` };
     }
 
     if (!data || data.length === 0) {
-      console.log("Transcript Search: No matching videos found for keywords:", validatedKeywords);
+      console.log("[TRANSCRIPT-SEARCH] No matching videos found for keywords:", validatedKeywords);
       
-      // Try a fallback search with just the first valid keyword
-      if (validatedKeywords.length > 0) {
-        const fallbackKeyword = validatedKeywords[0];
-        const fallbackResult = await supabase
-          .from("videos")
-          .select("*")
-          .limit(1);
+      // Try a fallback search - just get any video as last resort
+      const fallbackResult = await supabase
+        .from("videos")
+        .select("*")
+        .limit(1);
+        
+      if (fallbackResult.data && fallbackResult.data.length > 0) {
+        console.log("[TRANSCRIPT-SEARCH] Found fallback video");
+        
+        // Extract and validate video URLs
+        const videoUrls = fallbackResult.data
+          .map(video => validateVideoUrl(video.video_url))
+          .filter(url => !!url);
           
-        if (fallbackResult.data && fallbackResult.data.length > 0) {
-          console.log("Transcript Search: Found fallback video");
-          
-          // Extract and validate video URLs
-          const videoUrls = fallbackResult.data
-            .map(video => validateVideoUrl(video.video_url))
-            .filter(url => !!url);
-            
-          if (videoUrls.length > 0) {
-            return { videos: videoUrls, success: true };
-          }
+        if (videoUrls.length > 0) {
+          return { videos: videoUrls, success: true };
         }
       }
       
@@ -232,7 +235,7 @@ export const fetchVideosWithDetails = async (): Promise<TranscriptSearchResult> 
       .map(video => validateVideoUrl(video.video_url))
       .filter(url => !!url); // Filter out invalid URLs
     
-    console.log("Transcript Search: Fetched and validated Video URLs:", videoUrls);
+    console.log("[TRANSCRIPT-SEARCH] Fetched and validated Video URLs:", videoUrls);
     
     if (videoUrls.length === 0) {
       return { 
@@ -244,7 +247,7 @@ export const fetchVideosWithDetails = async (): Promise<TranscriptSearchResult> 
     
     return { videos: videoUrls, success: true };
   } catch (error) {
-    console.error("Transcript Search: Unexpected error:", error);
+    console.error("[TRANSCRIPT-SEARCH] Unexpected error:", error);
     return { 
       videos: [], 
       success: false, 
@@ -262,12 +265,12 @@ export const testVideoUrls = async (): Promise<{url: string, accessible: boolean
       .select("video_url");
       
     if (error) {
-      console.error("Error fetching videos for testing:", error);
+      console.error("[TRANSCRIPT-SEARCH] Error fetching videos for testing:", error);
       return [];
     }
     
     if (!data || data.length === 0) {
-      console.warn("No videos found in database to test");
+      console.warn("[TRANSCRIPT-SEARCH] No videos found in database to test");
       return [];
     }
     
@@ -288,7 +291,7 @@ export const testVideoUrls = async (): Promise<{url: string, accessible: boolean
           
           return { url: validUrl, accessible: true };
         } catch (e) {
-          console.error("URL not accessible:", validUrl, e);
+          console.error("[TRANSCRIPT-SEARCH] URL not accessible:", validUrl, e);
           return { url: validUrl, accessible: false };
         }
       })
@@ -296,7 +299,12 @@ export const testVideoUrls = async (): Promise<{url: string, accessible: boolean
     
     return results;
   } catch (error) {
-    console.error("Error testing video URLs:", error);
+    console.error("[TRANSCRIPT-SEARCH] Error testing video URLs:", error);
     return [];
   }
+};
+
+// New utility to get a hard-coded fallback video in case all else fails
+export const getFallbackVideo = (): string => {
+  return "https://boncletesuahajikgrrz.supabase.co/storage/v1/object/public/videos//WhatsApp%20end-to-end%20encryption.mp4";
 };

@@ -23,6 +23,7 @@ class VideoLoadingManagerClass {
   private lastResetTime: number = 0;
   private processedVideoIds = new Set<string>();
   private lastTranscriptProcessTime: number = 0;
+  private forceNextTranscriptProcess: boolean = false;
 
   constructor() {
     this.debug('VideoLoadingManager initialized');
@@ -49,6 +50,13 @@ class VideoLoadingManagerClass {
     // If there's an active lock, queue this request
     if (this.isProcessing || this.currentLock) {
       this.debug(`Lock acquisition failed for ${requestId}, already locked by ${this.currentLock}`);
+      
+      // Special case: If request is for video player visibility, allow it to proceed
+      if (requestId.includes('video-set') || requestId.includes('video-ready')) {
+        this.debug(`Special case: Allowing video visibility request to proceed despite lock: ${requestId}`);
+        return true;
+      }
+      
       return false;
     }
     
@@ -57,7 +65,7 @@ class VideoLoadingManagerClass {
     this.currentLock = requestId;
     this.pendingRequests.add(requestId);
     
-    // Set a safety timeout to auto-release lock after 15 seconds
+    // Set a safety timeout to auto-release lock after 10 seconds (reduced from 15)
     if (this.lockTimeout) {
       clearTimeout(this.lockTimeout);
     }
@@ -65,7 +73,7 @@ class VideoLoadingManagerClass {
     this.lockTimeout = setTimeout(() => {
       this.debug(`Force-releasing stale lock: ${this.currentLock}`);
       this.releaseVideoLoadingLock(this.currentLock || '');
-    }, 15000);
+    }, 10000);
     
     this.debug(`Lock acquired by ${requestId}`);
     return true;
@@ -124,11 +132,11 @@ class VideoLoadingManagerClass {
       const videoIdKey = `${nextRequest.id}-${nextRequest.url}`;
       this.processedVideoIds.add(videoIdKey);
       
-      // Set a timeout to remove from processed set after 10 seconds
+      // Set a timeout to remove from processed set after 5 seconds (reduced from 10)
       setTimeout(() => {
         this.processedVideoIds.delete(videoIdKey);
         this.debug(`Removed ${nextRequest?.name} from processed videos list`);
-      }, 10000);
+      }, 5000);
       
       // Dispatch event to process this video
       window.dispatchEvent(new CustomEvent('process_pending_video', {
@@ -174,6 +182,17 @@ class VideoLoadingManagerClass {
     // If not currently processing, try to process next request
     if (!this.isProcessing && !this.currentLock) {
       this.processNextQueuedRequest();
+    } else {
+      // If we're processing but the queue is getting long, consider force releasing the lock
+      if (this.requestQueue.length > 3) {
+        this.debug(`Queue getting long (${this.requestQueue.length}), considering force release`);
+        
+        // Only force release if lock is older than 5 seconds
+        if (this.currentLock && Date.now() - this.lastResetTime > 5000) {
+          this.debug(`Force releasing lock due to queue buildup: ${this.currentLock}`);
+          this.releaseVideoLoadingLock(this.currentLock);
+        }
+      }
     }
   }
 
@@ -182,20 +201,10 @@ class VideoLoadingManagerClass {
   }
 
   public resetVideoLoadingState(): void {
-    // Only reset if it's been more than 2 seconds since the last reset
+    // Only reset if it's been more than 1 second since the last reset (reduced from 2)
     const now = Date.now();
-    if (now - this.lastResetTime < 2000) {
+    if (now - this.lastResetTime < 1000) {
       this.debug('Skipping reset, too soon since last reset');
-      return;
-    }
-    
-    // Only reset if we don't have active requests
-    if (this.requestQueue.length > 0 || this.pendingRequests.size > 0 || this.isProcessing) {
-      this.debug('Not resetting - active requests exist', { 
-        queueLength: this.requestQueue.length, 
-        pendingRequests: this.pendingRequests.size,
-        isProcessing: this.isProcessing 
-      });
       return;
     }
     
@@ -214,7 +223,7 @@ class VideoLoadingManagerClass {
   public clearStaleLocks(): void {
     this.debug('Clearing stale video requests. Before:', this.pendingRequests.size);
     
-    // Only release lock if it's been more than 15 seconds
+    // Only release lock if it's been more than 10 seconds (reduced from 15)
     const now = Date.now();
     let shouldRelease = false;
     
@@ -224,9 +233,9 @@ class VideoLoadingManagerClass {
       
       if (currentLockRequest) {
         const matchingQueueItem = this.requestQueue.find(req => req.requestId === currentLockRequest);
-        if (matchingQueueItem && now - matchingQueueItem.requestTime > 15000) {
+        if (matchingQueueItem && now - matchingQueueItem.requestTime > 10000) {
           shouldRelease = true;
-          this.debug(`Force releasing stale lock ${this.currentLock} after 15 seconds`);
+          this.debug(`Force releasing stale lock ${this.currentLock} after 10 seconds`);
         }
       } else {
         shouldRelease = true;
@@ -244,8 +253,8 @@ class VideoLoadingManagerClass {
       }
     }
     
-    // Only keep recent requests in queue (less than 30 seconds old)
-    this.requestQueue = this.requestQueue.filter(req => now - req.requestTime < 30000);
+    // Only keep recent requests in queue (less than 20 seconds old - reduced from 30)
+    this.requestQueue = this.requestQueue.filter(req => now - req.requestTime < 20000);
     this.debug('Updated queue length after cleanup:', this.requestQueue.length);
     
     // If not processing and have items in queue, process next
@@ -254,13 +263,33 @@ class VideoLoadingManagerClass {
     }
   }
 
+  // Override transcript throttling if needed
+  public forceProcessNextTranscript(): void {
+    this.forceNextTranscriptProcess = true;
+    this.debug('Force processing next transcript enabled');
+  }
+
   // Keep track of recently processed transcripts to avoid duplicates
   public isNewTranscript(transcript: string): boolean {
     if (!transcript) return false;
     
-    // Rate limit transcript processing (no more than once per 1.5 seconds)
+    // If force processing is enabled, bypass throttling
+    if (this.forceNextTranscriptProcess) {
+      this.debug(`Force processing transcript - bypassing throttle checks`);
+      this.forceNextTranscriptProcess = false;
+      this.lastTranscriptProcessTime = Date.now();
+      
+      // Still update the recent transcripts list
+      const cleanedTranscript = transcript.toLowerCase().trim();
+      this.lastTranscripts.unshift(cleanedTranscript);
+      this.lastTranscripts = this.lastTranscripts.slice(0, 3);
+      
+      return true;
+    }
+    
+    // Rate limit transcript processing (no more than once per 1 second - reduced from 1.5)
     const now = Date.now();
-    if (now - this.lastTranscriptProcessTime < 1500) {
+    if (now - this.lastTranscriptProcessTime < 1000) {
       this.debug(`Throttling transcript processing, too soon since last process`);
       return false;
     }
@@ -271,7 +300,7 @@ class VideoLoadingManagerClass {
     
     // Check if this transcript is too similar to recent ones
     for (const recent of this.lastTranscripts) {
-      // Simple similarity check - if they share 80% of words
+      // Reduced similarity threshold to 70% (from 80%)
       const words1 = new Set(cleanedTranscript.split(/\s+/));
       const words2 = new Set(recent.split(/\s+/));
       
@@ -279,7 +308,7 @@ class VideoLoadingManagerClass {
       const commonWords = [...words1].filter(word => words2.has(word));
       const overlapPercentage = commonWords.length / Math.min(words1.size, words2.size);
       
-      if (overlapPercentage > 0.8) {
+      if (overlapPercentage > 0.7) {
         this.debug(`Transcript too similar to recent one: ${overlapPercentage.toFixed(2)} overlap`);
         return false;
       }
@@ -307,8 +336,19 @@ class VideoLoadingManagerClass {
 
   // Video player element state tracking
   public setVideoElementReady(ready: boolean): void {
+    const wasReady = this.videoElementReady;
     this.videoElementReady = ready;
-    this.debug(`Video element ready state set to: ${ready}`);
+    this.debug(`Video element ready state set to: ${ready} (was: ${wasReady})`);
+    
+    // If the video element just became ready, we should force process any pending videos
+    if (ready && !wasReady && this.requestQueue.length > 0) {
+      this.debug(`Video element just became ready with ${this.requestQueue.length} pending requests, processing next`);
+      if (this.currentLock) {
+        this.debug(`Releasing current lock ${this.currentLock} to allow processing of pending video`);
+        this.releaseVideoLoadingLock(this.currentLock);
+      }
+      this.processNextQueuedRequest();
+    }
   }
 
   public isVideoElementReady(): boolean {
@@ -364,3 +404,6 @@ export const isVideoElementReady = () =>
 
 export const isVideoAlreadyQueued = (id: number, url: string) => 
   VideoLoadingManager.isVideoAlreadyQueued(id, url);
+
+export const forceProcessNextTranscript = () => 
+  VideoLoadingManager.forceProcessNextTranscript();

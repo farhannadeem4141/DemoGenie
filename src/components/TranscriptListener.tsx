@@ -17,7 +17,8 @@ import {
   validateSearchKeyword,
   setVideoElementReady,
   isVideoElementReady,
-  isVideoAlreadyQueued
+  isVideoAlreadyQueued,
+  forceProcessNextTranscript
 } from '@/utils/videoLoadingManager';
 
 interface TranscriptListenerProps {
@@ -50,6 +51,8 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
   const currentVideoRequestRef = useRef<string | null>(null);
   const videoPlayerReadyRef = useRef<boolean>(false);
   const [transcriptStabilityTimer, setTranscriptStabilityTimer] = useState<NodeJS.Timeout | null>(null);
+  const forceVideoDisplayTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const visibilityCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const checkVapiButtonVisibility = () => {
     const vapiButton = document.querySelector('[id^="vapi-support-btn"]');
@@ -61,53 +64,72 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
   };
 
   const handleVideoPlayerReady = (isReady: boolean) => {
-    console.log(`[DEBUG] Video player reported ready state: ${isReady}`);
+    console.log(`[VIDEO-DEBUG] Video player reported ready state: ${isReady}`);
     videoPlayerReadyRef.current = isReady;
     setVideoElementReady(isReady);
     
     if (isReady && currentVideo && !isVideoVisible) {
-      console.log("[DEBUG] Video player just became ready with pending video, displaying it");
+      console.log("[VIDEO-DEBUG] Video player just became ready with pending video, displaying it");
       
       const requestId = `video-ready-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
       
-      if (acquireVideoLoadingLock(requestId)) {
-        try {
-          const videoKeyValue = `video-${currentVideo.id}-${Date.now()}-${videoRenderAttempts}-ready`;
-          console.log(`[DEBUG] Setting video key to ${videoKeyValue}`);
+      try {
+        const videoKeyValue = `video-${currentVideo.id}-${Date.now()}-${videoRenderAttempts}-ready`;
+        console.log(`[VIDEO-DEBUG] Setting video key to ${videoKeyValue}`);
+        
+        setVideoKey(videoKeyValue);
+        setCurrentVideoId(currentVideo.id);
+        setCurrentVideoUrl(currentVideo.video_url);
+        
+        setTimeout(() => {
+          setIsVideoVisible(true);
+          setSearchError(null);
           
-          setVideoKey(videoKeyValue);
-          setCurrentVideoId(currentVideo.id);
-          setCurrentVideoUrl(currentVideo.video_url);
-          
-          setTimeout(() => {
-            setIsVideoVisible(true);
-            setSearchError(null);
-            releaseVideoLoadingLock(requestId);
-            
-            toast({
-              title: "Video Ready",
-              description: `Now playing: ${currentVideo.video_name || currentVideo.keyword}`,
-              duration: 3000,
-            });
-          }, 300);
-        } catch (e) {
-          console.error("[ERROR] Error displaying ready video:", e);
-          releaseVideoLoadingLock(requestId);
-        }
+          toast({
+            title: "Video Ready",
+            description: `Now playing: ${currentVideo.video_name || currentVideo.keyword}`,
+            duration: 3000,
+          });
+        }, 100);
+      } catch (e) {
+        console.error("[VIDEO-ERROR] Error displaying ready video:", e);
       }
     }
   };
 
   useEffect(() => {
+    const checkVideoVisibility = () => {
+      if (currentVideo && !isVideoVisible && videoPlayerReadyRef.current) {
+        console.log("[VIDEO-DEBUG] Found set video but not visible, forcing display");
+        const videoKeyValue = `video-${currentVideo.id}-${Date.now()}-${Math.random().toString(36).substring(2, 7)}-forced`;
+        setVideoKey(videoKeyValue);
+        
+        setTimeout(() => {
+          setIsVideoVisible(true);
+          console.log("[VIDEO-DEBUG] Forced video visibility to true");
+        }, 100);
+      }
+    };
+    
+    visibilityCheckIntervalRef.current = setInterval(checkVideoVisibility, 2000);
+    
+    return () => {
+      if (visibilityCheckIntervalRef.current) {
+        clearInterval(visibilityCheckIntervalRef.current);
+      }
+    };
+  }, [currentVideo, isVideoVisible]);
+
+  useEffect(() => {
     const watchTranscript = () => {
-      console.log("[DEBUG] Setting up enhanced transcript watcher with stability");
+      console.log("[VIDEO-DEBUG] Setting up enhanced transcript watcher with stability");
       
       const originalSetItem = localStorage.setItem;
       localStorage.setItem = function(key, value) {
         originalSetItem.apply(this, [key, value]);
         
         if (key === 'transcript') {
-          console.log(`[DEBUG] Detected change to transcript: "${value}"`);
+          console.log(`[VIDEO-DEBUG] Detected change to transcript: "${value}"`);
           
           if (transcriptStabilityTimer) {
             clearTimeout(transcriptStabilityTimer);
@@ -115,13 +137,13 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
           
           const timer = setTimeout(() => {
             const currentTranscript = localStorage.getItem('transcript') || '';
-            console.log(`[DEBUG] Processing stabilized transcript: "${currentTranscript}"`);
+            console.log(`[VIDEO-DEBUG] Processing stabilized transcript: "${currentTranscript}"`);
             
-            if (currentTranscript && currentTranscript.trim() && 
-                isNewTranscript(currentTranscript)) {
+            if (currentTranscript && currentTranscript.trim()) {
+              forceProcessNextTranscript();
               handleVoiceInput(currentTranscript);
             }
-          }, 1500);
+          }, 1000);
           
           setTranscriptStabilityTimer(timer);
         }
@@ -129,7 +151,7 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
       
       window.addEventListener('voice_input', (e: any) => {
         if (e.detail && e.detail.text && e.detail.text.trim()) {
-          console.log(`[DEBUG] Received voice_input event with text: "${e.detail.text}"`);
+          console.log(`[VIDEO-DEBUG] Received voice_input event with text: "${e.detail.text}"`);
           handleVoiceInput(e.detail.text);
         }
       });
@@ -137,16 +159,17 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
       transcriptWatcherRef.current = window.setInterval(() => {
         const currentTranscript = localStorage.getItem('transcript') || '';
         if (currentTranscript !== lastProcessedInputRef.current && 
-            currentTranscript.trim() && 
-            isNewTranscript(currentTranscript)) {
-          console.log(`[DEBUG] Detected new transcript via interval check: "${currentTranscript}"`);
+            currentTranscript.trim()) {
+          console.log(`[VIDEO-DEBUG] Detected new transcript via interval check: "${currentTranscript}"`);
+          forceProcessNextTranscript();
           handleVoiceInput(currentTranscript);
         }
       }, 2000);
       
       const initialTranscript = localStorage.getItem('transcript');
-      if (initialTranscript && initialTranscript.trim() && isNewTranscript(initialTranscript)) {
-        console.log(`[DEBUG] Found initial transcript value: "${initialTranscript}"`);
+      if (initialTranscript && initialTranscript.trim()) {
+        console.log(`[VIDEO-DEBUG] Found initial transcript value: "${initialTranscript}"`);
+        forceProcessNextTranscript();
         handleVoiceInput(initialTranscript);
       }
     };
@@ -159,14 +182,14 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
     
     window.addEventListener('recording_status_change', (e: any) => {
       if (e.detail && typeof e.detail.isActive === 'boolean') {
-        console.log(`[DEBUG] Recording status changed to: ${e.detail.isActive}`);
+        console.log(`[VIDEO-DEBUG] Recording status changed to: ${e.detail.isActive}`);
         setRecordingStatus(e.detail.isActive);
       }
     });
     
     window.addEventListener('process_pending_video', (e: CustomEvent<any>) => {
       if (e.detail) {
-        console.log("[DEBUG] Processing pending video request:", e.detail);
+        console.log("[VIDEO-DEBUG] Processing pending video request:", e.detail);
         handleVideoRequest({
           id: e.detail.id,
           url: e.detail.url,
@@ -176,6 +199,20 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
       }
     });
     
+    forceVideoDisplayTimerRef.current = setInterval(() => {
+      if (currentVideo && !isVideoVisible && videoPlayerReadyRef.current) {
+        console.log("[VIDEO-DEBUG] Force display timer triggered - video should be visible but isn't");
+        
+        const videoKeyValue = `video-${currentVideo.id}-${Date.now()}-force-display`;
+        setVideoKey(videoKeyValue);
+        
+        setTimeout(() => {
+          setIsVideoVisible(true);
+          console.log("[VIDEO-DEBUG] Forced video visibility to true via timer");
+        }, 100);
+      }
+    }, 3000);
+    
     return () => {
       if (transcriptWatcherRef.current) {
         clearInterval(transcriptWatcherRef.current);
@@ -183,6 +220,10 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
       
       if (transcriptStabilityTimer) {
         clearTimeout(transcriptStabilityTimer);
+      }
+      
+      if (forceVideoDisplayTimerRef.current) {
+        clearInterval(forceVideoDisplayTimerRef.current);
       }
       
       window.removeEventListener('video_player_ready', (e: any) => {
@@ -195,11 +236,11 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
       
       window.removeEventListener('voice_input', (e: any) => {});
     };
-  }, [toast, transcriptStabilityTimer]);
+  }, [toast, transcriptStabilityTimer, currentVideo, isVideoVisible]);
 
   useEffect(() => {
     if (!currentVideo) {
-      console.log("TranscriptListener: No current video, hiding player");
+      console.log("[VIDEO-DEBUG] No current video, hiding player");
       setIsVideoVisible(false);
       setCurrentVideoId(null);
       setCurrentVideoUrl(null);
@@ -209,53 +250,15 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
     const requestId = `video-set-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
     currentVideoRequestRef.current = requestId;
     
-    if (!acquireVideoLoadingLock(requestId)) {
-      console.log("TranscriptListener: Already processing a video set request, queueing this one");
-      
-      if (!isVideoAlreadyQueued(currentVideo.id, currentVideo.video_url)) {
-        queueVideoRequest({
-          id: currentVideo.id,
-          url: currentVideo.video_url,
-          name: currentVideo.video_name,
-          keyword: currentVideo.keyword
-        });
-      } else {
-        console.log("TranscriptListener: This video is already being processed or queued");
-      }
-      return;
-    }
-    
-    if (!isVideoElementReady()) {
-      console.log("TranscriptListener: Video player not ready, queueing request and waiting");
-      
-      if (!isVideoAlreadyQueued(currentVideo.id, currentVideo.video_url)) {
-        queueVideoRequest({
-          id: currentVideo.id,
-          url: currentVideo.video_url,
-          name: currentVideo.video_name,
-          keyword: currentVideo.keyword
-        });
-      }
-      releaseVideoLoadingLock(requestId);
-      return;
-    }
-    
-    if (currentVideoId === currentVideo.id && 
-        currentVideoUrl === currentVideo.video_url && 
-        isVideoVisible) {
-      console.log("TranscriptListener: Video ID and URL unchanged and already visible, skipping remount");
-      releaseVideoLoadingLock(requestId);
-      return;
-    }
-    
-    console.log("TranscriptListener: New video available, details:", {
+    console.log("[VIDEO-DEBUG] Current video set, details:", {
       id: currentVideo.id,
       name: currentVideo.video_name,
-      url: currentVideo.video_url.substring(0, 50) + '...'
+      url: currentVideo.video_url.substring(0, 50) + '...',
+      requestId
     });
     
     if (!currentVideo.video_url || !currentVideo.video_url.startsWith('http')) {
-      console.error("TranscriptListener: Invalid video URL", currentVideo.video_url);
+      console.error("[VIDEO-ERROR] Invalid video URL", currentVideo.video_url);
       videoErrorsRef.current.push(`Invalid video URL: ${currentVideo.video_url?.substring(0, 30)}...`);
       setSearchError(`Invalid video URL format: ${currentVideo.video_url?.substring(0, 30)}...`);
       toast({
@@ -264,7 +267,6 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
         description: "Invalid video URL format",
         duration: 3000,
       });
-      releaseVideoLoadingLock(requestId);
       return;
     }
     
@@ -272,7 +274,7 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
     setCurrentVideoUrl(currentVideo.video_url);
     
     const videoKeyValue = `video-${currentVideo.id}-${Date.now()}-${videoRenderAttempts}-${Math.random().toString(36).substring(2, 7)}`;
-    console.log(`TranscriptListener: Setting video key to ${videoKeyValue}`);
+    console.log(`[VIDEO-DEBUG] Setting video key to ${videoKeyValue}`);
     setVideoKey(videoKeyValue);
     
     if (videoVisibilityTimerRef.current) {
@@ -283,25 +285,24 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
     
     videoVisibilityTimerRef.current = setTimeout(() => {
       if (currentVideoRequestRef.current === requestId) {
-        console.log("TranscriptListener: Making video visible");
+        console.log("[VIDEO-DEBUG] Making video visible with key", videoKeyValue);
         setIsVideoVisible(true);
         setSearchError(null);
-        
-        setTimeout(() => {
-          releaseVideoLoadingLock(requestId);
-        }, 500);
       } else {
-        console.log("TranscriptListener: Video request was superseded by another request, not making visible");
-        releaseVideoLoadingLock(requestId);
+        console.log("[VIDEO-DEBUG] Video request was superseded by another request, checking if we should make it visible anyway");
+        if (!isVideoVisible) {
+          console.log("[VIDEO-DEBUG] No video currently visible, showing this one anyway");
+          setIsVideoVisible(true);
+        }
       }
-    }, 300);
+    }, 150);
     
     return () => {
       if (videoVisibilityTimerRef.current) {
         clearTimeout(videoVisibilityTimerRef.current);
       }
     };
-  }, [currentVideo, toast, videoRenderAttempts]);
+  }, [currentVideo, toast, videoRenderAttempts, isVideoVisible]);
 
   useEffect(() => {
     console.log("TranscriptListener: Recording status prop changed:", isRecording);
@@ -321,30 +322,32 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
 
   const handleVoiceInput = async (inputText: string) => {
     if (!inputText || inputText.trim() === '') {
-      console.log("[WARNING] Empty voice input, skipping");
+      console.log("[VIDEO-WARNING] Empty voice input, skipping");
       setSearchError("Empty voice input, cannot search for videos");
       return;
     }
     
     const now = Date.now();
-    if (now - lastSearchTimestampRef.current < 500) {
-      console.log("[DEBUG] Skipping too frequent search request");
+    if (now - lastSearchTimestampRef.current < 300) {
+      console.log("[VIDEO-DEBUG] Skipping too frequent search request");
       return;
     }
     lastSearchTimestampRef.current = now;
     
-    if (lastProcessedInputRef.current === inputText) {
-      console.log("[DEBUG] Skipping duplicate voice input:", inputText);
+    const timeSinceLastProcess = now - lastSearchTimestampRef.current;
+    if (lastProcessedInputRef.current === inputText && timeSinceLastProcess < 10000) {
+      console.log("[VIDEO-DEBUG] Skipping duplicate voice input:", inputText);
       return;
     }
     lastProcessedInputRef.current = inputText;
     
-    console.log("[DEBUG] Processing voice input for search:", inputText);
+    console.log("[VIDEO-DEBUG] Processing voice input for search:", inputText);
     
     if (processingKeywordRef.current) {
-      console.log("[DEBUG] Already processing a keyword, skipping this input");
-      setSearchError("Already processing a previous search, please wait");
-      return;
+      console.log("[VIDEO-DEBUG] Already processing a keyword, but will queue this input");
+      setTimeout(() => {
+        processingKeywordRef.current = false;
+      }, 500);
     }
     
     processingKeywordRef.current = true;
@@ -361,7 +364,7 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
       localStorage.setItem('transcript', inputText);
       
       const keywords = extractKeywords(inputText);
-      console.log("[DEBUG] Extracted keywords:", keywords);
+      console.log("[VIDEO-DEBUG] Extracted keywords:", keywords);
       
       const savedInputs = JSON.parse(localStorage.getItem('voice_input_history') || '[]');
       const newInput = {
@@ -373,7 +376,7 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
       localStorage.setItem('voice_input_history', 
         JSON.stringify([newInput, ...savedInputs].slice(0, 50))
       );
-      console.log("[DEBUG] Saved voice input to local storage with keywords");
+      console.log("[VIDEO-DEBUG] Saved voice input to local storage with keywords");
       
       toast({
         title: "Searching for Video",
@@ -382,10 +385,10 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
       });
       
       if (inputText.toLowerCase().includes('catalog')) {
-        console.log("[DEBUG] Catalog keyword detected, using specialized catalog query");
+        console.log("[VIDEO-DEBUG] Catalog keyword detected, using specialized catalog query");
         try {
           const result = await queryVideosWithCatalogTag();
-          console.log("[DEBUG] Catalog query result:", result);
+          console.log("[VIDEO-DEBUG] Catalog query result:", result);
           if (result.success && result.data && result.data.length > 0) {
             const catalogVideo = {
               id: result.data[0].id,
@@ -393,7 +396,7 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
               name: result.data[0].video_name || 'Catalog Feature',
               keyword: 'catalog'
             };
-            console.log("[DEBUG] Setting catalog video directly:", catalogVideo);
+            console.log("[VIDEO-DEBUG] Setting catalog video directly:", catalogVideo);
             
             handleVideoRequest(catalogVideo);
             
@@ -402,19 +405,19 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
             return;
           }
         } catch (error) {
-          console.error("[ERROR] Error in direct catalog query:", error);
+          console.error("[VIDEO-ERROR] Error in direct catalog query:", error);
           videoErrorsRef.current.push(`Catalog query error: ${error instanceof Error ? error.message : 'Unknown error'}`);
           setSearchError(`Catalog query error: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
       }
       
       try {
-        console.log("[DEBUG] Searching for videos with keywords:", keywords);
+        console.log("[VIDEO-DEBUG] Searching for videos with keywords:", keywords);
         const searchResult = await searchAndPlayVideo(keywords.join(' '));
-        console.log("[DEBUG] Video search result:", searchResult);
+        console.log("[VIDEO-DEBUG] Video search result:", searchResult);
         
         if (searchResult.success && searchResult.video) {
-          console.log("[DEBUG] Setting video from search result:", searchResult.video);
+          console.log("[VIDEO-DEBUG] Setting video from search result:", searchResult.video);
           
           handleVideoRequest({
             id: searchResult.video.id,
@@ -423,26 +426,26 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
             keyword: searchResult.video.keyword
           });
           
-          console.log("[DEBUG] Video player should now be visible with:", searchResult.video.video_url);
+          console.log("[VIDEO-DEBUG] Video player should now be visible with:", searchResult.video.video_url);
           
           setSearchError(null);
           processingKeywordRef.current = false;
           setIsSearching(false);
           return;
         } else {
-          console.error("[WARNING] Keyword search failed:", searchResult.errorDetails);
+          console.error("[VIDEO-WARNING] Keyword search failed:", searchResult.errorDetails);
         }
       } catch (error) {
-        console.error("[ERROR] Error in keyword search:", error);
+        console.error("[VIDEO-ERROR] Error in keyword search:", error);
         videoErrorsRef.current.push(`Keyword search error: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
       
       try {
-        console.log("[DEBUG] Trying transcript-based search with details");
+        console.log("[VIDEO-DEBUG] Trying transcript-based search with details");
         const result = await fetchVideosWithDetails();
         
         if (result.success && result.videos.length > 0) {
-          console.log("[DEBUG] Found videos with transcript search:", result.videos);
+          console.log("[VIDEO-DEBUG] Found videos with transcript search:", result.videos);
           
           const videoUrl = result.videos[0];
           const videoName = videoUrl.split('/').pop()?.replace(/%20/g, ' ') || "Video";
@@ -458,19 +461,19 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
           setIsSearching(false);
           return;
         } else {
-          console.log("[WARNING] Transcript search error:", result.error);
+          console.log("[VIDEO-WARNING] Transcript search error:", result.error);
           setSearchError(`Transcript search error: ${result.error}`);
         }
       } catch (transcriptError) {
-        console.error("[ERROR] Error in transcript search:", transcriptError);
+        console.error("[VIDEO-ERROR] Error in transcript search:", transcriptError);
         setSearchError(`Transcript search exception: ${transcriptError instanceof Error ? transcriptError.message : 'Unknown error'}`);
       }
       
-      console.log("[WARNING] All search methods failed, using fallback video");
+      console.log("[VIDEO-WARNING] All search methods failed, using fallback video");
       useLocalFallbackVideo(inputText);
       
     } catch (error) {
-      console.error("[ERROR] Error processing voice input:", error);
+      console.error("[VIDEO-ERROR] Error processing voice input:", error);
       videoErrorsRef.current.push(`Voice input processing error: ${error instanceof Error ? error.message : 'Unknown error'}`);
       setSearchError(`Voice input processing error: ${error instanceof Error ? error.message : 'Unknown error'}`);
       
@@ -486,7 +489,7 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
       setTimeout(() => {
         processingKeywordRef.current = false;
         setIsSearching(false);
-      }, 1000);
+      }, 500);
     }
   };
 
@@ -540,19 +543,10 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
   }): void => {
     const requestId = `handle-video-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
     
-    if (isVideoAlreadyQueued(video.id, video.url)) {
-      console.log(`TranscriptListener: Video ${video.name} already in processing queue, skipping duplicate request`);
-      return;
-    }
-    
-    if (!acquireVideoLoadingLock(requestId)) {
-      console.log("TranscriptListener: Already processing a video request, queueing this one");
-      queueVideoRequest(video);
-      return;
-    }
+    console.log(`[VIDEO-DEBUG] Video request for ${video.name} (ID: ${video.id}), URL: ${video.url.substring(0, 30)}...`);
     
     try {
-      console.log(`TranscriptListener: Setting current video: ${video.name} (ID: ${video.id})`);
+      console.log(`[VIDEO-DEBUG] Setting current video: ${video.name} (ID: ${video.id})`);
       setCurrentVideo({
         id: video.id,
         video_url: video.url,
@@ -567,11 +561,15 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
       });
       
       setTimeout(() => {
-        releaseVideoLoadingLock(requestId);
-      }, 300);
+        if (currentVideo && currentVideo.id === video.id && !isVideoVisible) {
+          console.log(`[VIDEO-DEBUG] Force displaying video that wasn't shown: ${video.name}`);
+          const forceKey = `video-${video.id}-${Date.now()}-force`;
+          setVideoKey(forceKey);
+          setIsVideoVisible(true);
+        }
+      }, 1000);
     } catch (error) {
-      console.error("TranscriptListener: Error in handleVideoRequest:", error);
-      releaseVideoLoadingLock(requestId);
+      console.error("[VIDEO-ERROR] Error in handleVideoRequest:", error);
       
       videoErrorsRef.current.push(`Error processing video: ${error instanceof Error ? error.message : 'Unknown error'}`);
       setVideoRenderAttempts(prev => prev + 1);
@@ -730,7 +728,7 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
 
   useEffect(() => {
     if (currentVideo && isVideoVisible && videoKey) {
-      console.log(`TranscriptListener: Video should be visible now. Key: ${videoKey}, Attempt: ${videoRenderAttempts}, URL: ${currentVideo.video_url}`);
+      console.log(`[VIDEO-DEBUG] Video should be visible now. Key: ${videoKey}, Attempt: ${videoRenderAttempts}, URL: ${currentVideo.video_url.substring(0, 30)}...`);
     }
   }, [currentVideo, isVideoVisible, videoKey, videoRenderAttempts]);
 
@@ -763,7 +761,7 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
         {currentVideo && currentVideo.video_url && (
           <div 
             className={cn(
-              "mb-4 transform transition-all duration-300 ease-in-out shadow-lg rounded-lg overflow-hidden",
+              "mb-4 transform transition-all duration-200 ease-in-out shadow-lg rounded-lg overflow-hidden",
               isVideoVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
             )}
             data-testid="video-player-container"
@@ -773,7 +771,7 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({
                 key={videoKey}
                 videoUrl={currentVideo.video_url} 
                 videoName={currentVideo.video_name}
-                onEnded={() => console.log("TranscriptListener: Video playback ended")}
+                onEnded={() => console.log("[VIDEO-DEBUG] Video playback ended")}
                 onError={handleVideoError}
                 onClose={handleVideoClose}
               />
