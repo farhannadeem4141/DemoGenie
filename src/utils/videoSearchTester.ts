@@ -235,7 +235,8 @@ export async function testVoiceInputVideoSearch(customKeyword?: string) {
       console.error('Error details:', searchResult.errorDetails);
       
       // Try to determine why no video was found
-      if (searchResult.errorDetails?.step === 'database_query') {
+      if (typeof searchResult.errorDetails === 'string' && 
+          searchResult.errorDetails.includes('database_query')) {
         console.log('💡 Suggestion: There might be an issue with the database query');
         console.log('Checking database for "Quick replies" videos directly...');
         
@@ -297,13 +298,15 @@ export async function testVoiceInputVideoSearch(customKeyword?: string) {
             }
           });
         });
-      } else if (searchResult.errorDetails?.step === 'no_results') {
+      } else if (typeof searchResult.errorDetails === 'string' && 
+                searchResult.errorDetails.includes('no_results')) {
         console.log('💡 Suggestion: No matching videos found for the keyword. Check if videos with tag "Quick replies" exist in the database');
-      } else if (searchResult.errorDetails?.step === 'url_validation') {
+      } else if (typeof searchResult.errorDetails === 'string' && 
+                searchResult.errorDetails.includes('url_validation')) {
         console.log('💡 Suggestion: A video was found but its URL is invalid');
       }
       
-      throw new Error(`Video search failed at step: ${searchResult.errorDetails?.step}`);
+      throw new Error(`Video search failed: ${searchResult.errorDetails}`);
     }
   } catch (error) {
     console.error('❌ Test failed:', error);
