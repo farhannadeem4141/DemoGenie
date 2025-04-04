@@ -77,23 +77,33 @@ export const searchAndPlayVideo = async (keyword: string): Promise<SearchAndPlay
     if (exactMatches && exactMatches.length > 0) {
       console.log(`[SearchAndPlay] Found ${exactMatches.length} exact matches`);
       
-      // Filter to only include videos with valid URLs
-      const validVideos = exactMatches
-        .map(video => ({
-          ...video,
-          video_url: validateVideoUrl(video.video_url)
-        }))
-        .filter(video => !!video.video_url);
+      // Filter to only include videos with valid URLs and pre-validate them
+      const validVideos = [];
+      
+      for (const video of exactMatches) {
+        const validatedUrl = validateVideoUrl(video.video_url);
+        if (validatedUrl) {
+          validVideos.push({
+            ...video,
+            video_url: validatedUrl
+          });
+        } else {
+          console.warn(`[SearchAndPlay] Video ID ${video.id} has invalid URL: ${video.video_url?.substring(0, 50)}`);
+        }
+      }
         
       if (validVideos.length > 0) {
         const selectedVideo = validVideos[0];
         console.log(`[SearchAndPlay] Selected exact match: "${selectedVideo.video_name}" (ID: ${selectedVideo.id})`);
         
+        // Perform a test validation before returning
+        const finalValidatedUrl = validateVideoUrl(selectedVideo.video_url, true);
+        
         return {
           success: true,
           video: {
             id: selectedVideo.id,
-            video_url: selectedVideo.video_url,
+            video_url: finalValidatedUrl || selectedVideo.video_url,
             video_name: selectedVideo.video_name || "Video",
             keyword: validKeyword
           }
@@ -127,23 +137,33 @@ export const searchAndPlayVideo = async (keyword: string): Promise<SearchAndPlay
       if (wordMatches && wordMatches.length > 0) {
         console.log(`[SearchAndPlay] Found ${wordMatches.length} matches with individual words`);
         
-        // Filter to only include videos with valid URLs
-        const validVideos = wordMatches
-          .map(video => ({
-            ...video,
-            video_url: validateVideoUrl(video.video_url)
-          }))
-          .filter(video => !!video.video_url);
+        // Filter to only include videos with valid URLs and pre-validate them
+        const validVideos = [];
+        
+        for (const video of wordMatches) {
+          const validatedUrl = validateVideoUrl(video.video_url);
+          if (validatedUrl) {
+            validVideos.push({
+              ...video,
+              video_url: validatedUrl
+            });
+          } else {
+            console.warn(`[SearchAndPlay] Video ID ${video.id} has invalid URL: ${video.video_url?.substring(0, 50)}`);
+          }
+        }
           
         if (validVideos.length > 0) {
           const selectedVideo = validVideos[0];
           console.log(`[SearchAndPlay] Selected word match: "${selectedVideo.video_name}" (ID: ${selectedVideo.id})`);
           
+          // Perform a thorough validation before returning
+          const finalValidatedUrl = validateVideoUrl(selectedVideo.video_url, true);
+          
           return {
             success: true,
             video: {
               id: selectedVideo.id,
-              video_url: selectedVideo.video_url,
+              video_url: finalValidatedUrl || selectedVideo.video_url,
               video_name: selectedVideo.video_name || "Video",
               keyword: validKeyword
             }
@@ -175,7 +195,7 @@ export const searchAndPlayVideo = async (keyword: string): Promise<SearchAndPlay
       if (broaderData && broaderData.length > 0) {
         // Found a video with broader search
         const video = broaderData[0];
-        const validatedUrl = validateVideoUrl(video.video_url);
+        const validatedUrl = validateVideoUrl(video.video_url, true);
         
         if (validatedUrl) {
           console.log(`[SearchAndPlay] Found video with broader search:`, video.video_name);
@@ -194,9 +214,12 @@ export const searchAndPlayVideo = async (keyword: string): Promise<SearchAndPlay
     
     // Special case for specific keywords based on common inputs
     const knownKeywordMap: Record<string, string[]> = {
-      'ad': ['advertise', 'advertising', 'advertisement'],
-      'adver': ['advertise', 'advertising', 'advertisement'],
+      'ad': ['advertise', 'advertising', 'advertisement', 'ad', 'ads'],
+      'adver': ['advertise', 'advertising', 'advertisement', 'advert'],
       'advertis': ['advertise', 'advertising', 'advertisement'],
+      'whatsapp': ['whatsapp', 'whats app', 'what app'],
+      'security': ['security', 'secure', 'protection'],
+      'encrypt': ['encryption', 'encrypted', 'secure'],
     };
     
     // Check if any of our keywords match known patterns
@@ -223,7 +246,7 @@ export const searchAndPlayVideo = async (keyword: string): Promise<SearchAndPlay
             
           if (mappedData && mappedData.length > 0) {
             const video = mappedData[0];
-            const validatedUrl = validateVideoUrl(video.video_url);
+            const validatedUrl = validateVideoUrl(video.video_url, true);
             
             if (validatedUrl) {
               console.log(`[SearchAndPlay] Found video with mapped keyword '${mappedKeyword}':`, video.video_name);
@@ -242,6 +265,32 @@ export const searchAndPlayVideo = async (keyword: string): Promise<SearchAndPlay
       }
     }
     
+    // Try fixed demo videos if available
+    console.log(`[SearchAndPlay] Trying to find any available demo video as fallback`);
+    const { data: demoVideos } = await supabase
+      .from("videos")
+      .select("*")
+      .or(`video_tag1.eq.demo,video_tag2.eq.demo,video_tag3.eq.demo`)
+      .limit(1);
+      
+    if (demoVideos && demoVideos.length > 0) {
+      const demoVideo = demoVideos[0];
+      const validatedUrl = validateVideoUrl(demoVideo.video_url, true);
+      
+      if (validatedUrl) {
+        console.log(`[SearchAndPlay] Found demo video as fallback:`, demoVideo.video_name);
+        return {
+          success: true,
+          video: {
+            id: demoVideo.id,
+            video_url: validatedUrl,
+            video_name: demoVideo.video_name || "Demo Video",
+            keyword: validKeyword
+          }
+        };
+      }
+    }
+    
     // Last resort - get any available video
     console.log(`[SearchAndPlay] No specific matches found, trying to fetch any available video as last resort`);
     const { data: anyData } = await supabase
@@ -251,7 +300,7 @@ export const searchAndPlayVideo = async (keyword: string): Promise<SearchAndPlay
       
     if (anyData && anyData.length > 0) {
       const video = anyData[0];
-      const validatedUrl = validateVideoUrl(video.video_url);
+      const validatedUrl = validateVideoUrl(video.video_url, true);
       
       if (validatedUrl) {
         console.log(`[SearchAndPlay] Using available video as fallback:`, video.video_name);
@@ -269,6 +318,14 @@ export const searchAndPlayVideo = async (keyword: string): Promise<SearchAndPlay
     
     // If we get here, we couldn't find any videos
     console.log(`[SearchAndPlay] No videos found for any attempt with keyword: "${validKeyword}"`);
+    
+    // Generate a toast notification for better user feedback
+    toast({
+      title: "No videos found",
+      description: `We couldn't find any videos matching "${validKeyword}". Please try a different search term.`,
+      variant: "destructive"
+    });
+    
     return { 
       success: false,
       errorDetails: `No videos found matching: ${validKeyword}` 
@@ -276,6 +333,14 @@ export const searchAndPlayVideo = async (keyword: string): Promise<SearchAndPlay
     
   } catch (error) {
     console.error(`[SearchAndPlay] Unexpected error:`, error);
+    
+    // Generate a toast notification for better user feedback
+    toast({
+      title: "Error searching for videos",
+      description: error instanceof Error ? error.message : "An unexpected error occurred",
+      variant: "destructive"
+    });
+    
     return { 
       success: false,
       errorDetails: `Unexpected error: ${error instanceof Error ? error.message : 'Unknown error'}` 

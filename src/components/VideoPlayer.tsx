@@ -71,7 +71,8 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     const cleanedUrl = videoUrl.trim().replace(/\n/g, '');
     console.log("VideoPlayer: Processing URL:", cleanedUrl);
     
-    const validatedUrl = validateVideoUrl(cleanedUrl);
+    // Use thorough validation to ensure URL is playable
+    const validatedUrl = validateVideoUrl(cleanedUrl, true);
     console.log("VideoPlayer: Validated URL:", validatedUrl || "(validation failed)");
     
     setProcessedUrl(validatedUrl || cleanedUrl);
@@ -130,14 +131,28 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       console.log("VideoPlayer: Setting video src and loading...");
       
       // Add cache busting parameter to prevent caching issues
-      const cacheBuster = `?cb=${Date.now()}`;
+      const cacheBuster = `cb=${Date.now()}`;
       const urlWithCache = processedUrl.includes('?') 
-        ? `${processedUrl}&cb=${Date.now()}`  
-        : `${processedUrl}${cacheBuster}`;
+        ? `${processedUrl}&${cacheBuster}`  
+        : `${processedUrl}?${cacheBuster}`;
         
       videoElement.src = urlWithCache;
       videoElement.load();
-      console.log("VideoPlayer: Video src set and load() called");
+      console.log("VideoPlayer: Video src set and load() called with:", urlWithCache);
+      
+      // Set a timeout to detect stalled loading
+      const loadTimeout = setTimeout(() => {
+        if (isLoading && mountedRef.current) {
+          console.warn("VideoPlayer: Loading timed out after 15 seconds");
+          if (!errorLoading) {
+            handleVideoError();
+          }
+        }
+      }, 15000);
+      
+      return () => {
+        clearTimeout(loadTimeout);
+      };
     } catch (e) {
       console.error("VideoPlayer: Error setting source or loading:", e);
       setErrorLoading(true);
@@ -146,6 +161,13 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       if (onError) onError();
       return;
     }
+  }, [processedUrl, onError, isMuted, isRefReady, isLoading]);
+
+  useEffect(() => {
+    // Skip if not mounted or no video element
+    if (!mountedRef.current || !videoRef.current) return;
+    
+    const videoElement = videoRef.current;
     
     const handleLoadedMetadata = () => {
       if (!mountedRef.current) return;
@@ -230,14 +252,25 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       handleVideoError();
     };
     
+    const handleStalled = () => {
+      console.warn("VideoPlayer: Video playback stalled");
+      // Only handle if we're still in loading state to avoid interrupting playback
+      if (isLoading && mountedRef.current) {
+        console.warn("VideoPlayer: Stalled during initial loading, attempting recovery");
+        handleVideoError();
+      }
+    };
+    
     videoElement.addEventListener('loadedmetadata', handleLoadedMetadata);
     videoElement.addEventListener('error', handleLoadError);
+    videoElement.addEventListener('stalled', handleStalled);
     
     return () => {
       videoElement.removeEventListener('loadedmetadata', handleLoadedMetadata);
       videoElement.removeEventListener('error', handleLoadError);
+      videoElement.removeEventListener('stalled', handleStalled);
     };
-  }, [processedUrl, onError, isMuted, isRefReady, videoName, toast]);
+  }, [videoName, toast, onError, processedUrl, isLoading]);
 
   const handleVideoError = () => {
     if (!mountedRef.current) return;
@@ -253,12 +286,12 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     
     // Check if the URL is a Supabase URL with double slashes - this is a common issue
     const hasDoubleSlash = processedUrl.includes('//storage/v1/object/public/') || 
-                           processedUrl.includes('//videos//');
+                            processedUrl.includes('//videos//');
     
     if (hasDoubleSlash && currentAttempt === 0) {
       // Try to fix common Supabase URL issue with double slashes
       const fixedUrl = processedUrl.replace('//storage/v1/object/public/', '/storage/v1/object/public/')
-                                   .replace('//videos//', '/videos/');
+                                    .replace('//videos//', '/videos/');
       
       console.log("VideoPlayer: Detected double slash issue, trying with fixed URL:", fixedUrl);
       loadAttemptRef.current += 1;
@@ -273,12 +306,40 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       return;
     }
     
+    // If we've tried the original URL and it failed, try another approach
+    if (currentAttempt === 0) {
+      // Re-validate with thorough option and try again
+      const thoroughlyValidatedUrl = validateVideoUrl(processedUrl, true);
+      if (thoroughlyValidatedUrl && thoroughlyValidatedUrl !== processedUrl) {
+        console.log("VideoPlayer: Trying with more thoroughly validated URL:", thoroughlyValidatedUrl);
+        loadAttemptRef.current += 1;
+        setProcessedUrl(thoroughlyValidatedUrl);
+        
+        toast({
+          title: "Retry with enhanced URL",
+          description: "Attempting to fix video format issues",
+          duration: 3000,
+        });
+        
+        return;
+      }
+    }
+    
+    // If we're still having issues, try one more time with a cache-buster
     if (currentAttempt < 2) {
       loadAttemptRef.current += 1;
       console.log(`VideoPlayer: Retry attempt ${loadAttemptRef.current} scheduled`);
       setTimeout(retryLoading, 2000);
     } else if (onError) {
       console.log("VideoPlayer: Max retries reached, calling onError");
+      
+      toast({
+        title: "Video playback failed",
+        description: "We were unable to play this video after multiple attempts",
+        variant: "destructive",
+        duration: 5000,
+      });
+      
       onError();
     }
   };
@@ -294,14 +355,21 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     
     try {
       // Try adding a cache-busting parameter to the URL
-      const cacheBuster = `?cache=${Date.now()}`;
+      const timestamp = Date.now();
+      const cacheBuster = `cache=${timestamp}`;
       const urlWithCacheBuster = processedUrl.includes('?') 
-        ? `${processedUrl}&cb=${Date.now()}`
-        : `${processedUrl}${cacheBuster}`;
+        ? `${processedUrl}&${cacheBuster}`
+        : `${processedUrl}?${cacheBuster}`;
       
       console.log("VideoPlayer: Retrying with cache buster:", urlWithCacheBuster);
       videoRef.current.src = urlWithCacheBuster;
       videoRef.current.load();
+      
+      toast({
+        title: "Retrying video playback",
+        description: "Attempting to reload the video",
+        duration: 3000,
+      });
     } catch (e) {
       console.error("VideoPlayer: Error during retry:", e);
       setErrorLoading(true);

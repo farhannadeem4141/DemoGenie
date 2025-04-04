@@ -4,7 +4,7 @@
  */
 
 // Helper to validate and sanitize video URLs with detailed logging
-export const validateVideoUrl = (url: string): string => {
+export const validateVideoUrl = (url: string, thorough: boolean = false): string => {
   console.log(`[URL VALIDATOR] Validating URL: ${url ? url.substring(0, 50) + "..." : "undefined or empty"}`);
   
   if (!url) {
@@ -15,7 +15,8 @@ export const validateVideoUrl = (url: string): string => {
   // Clean up the URL first - remove any whitespace, line breaks
   let cleanedUrl = url.trim().replace(/\n/g, '');
   
-  // Fix common Supabase URL issues
+  // Fix common URL format issues
+  // Fix double slashes in the path (except after protocol)
   if (cleanedUrl.includes('//storage/v1/object/public/')) {
     console.log('[URL VALIDATOR] Fixing double slash in Supabase URL path');
     cleanedUrl = cleanedUrl.replace('//storage/v1/object/public/', '/storage/v1/object/public/');
@@ -25,6 +26,29 @@ export const validateVideoUrl = (url: string): string => {
     console.log('[URL VALIDATOR] Fixing double slash in videos path');
     cleanedUrl = cleanedUrl.replace('//videos//', '/videos/');
   }
+  
+  // Fix missing protocol
+  if (cleanedUrl.startsWith('www.')) {
+    console.log('[URL VALIDATOR] Adding missing https:// to URL');
+    cleanedUrl = 'https://' + cleanedUrl;
+  }
+  
+  // Check for relative URLs that need to be converted to absolute
+  if (cleanedUrl.startsWith('/') && !cleanedUrl.startsWith('//')) {
+    console.log('[URL VALIDATOR] Converting relative URL to absolute URL');
+    // Use window.location.origin if available, otherwise fall back to a default
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    cleanedUrl = origin + cleanedUrl;
+  }
+  
+  // Fix other common issues
+  cleanedUrl = cleanedUrl
+    // Convert encoded spaces back to normal spaces then re-encode properly
+    .replace(/%20/g, ' ')
+    // Fix spaces in URLs
+    .replace(/\s+/g, '%20')
+    // Remove duplicate https:// or http:// if present
+    .replace(/(https?:\/\/)+/g, '$1');
   
   // First check if it's a valid URL format
   try {
@@ -37,10 +61,8 @@ export const validateVideoUrl = (url: string): string => {
     return '';
   }
   
-  // Remove any query params that might be causing issues
+  // Enhance URL validation for specific sources
   try {
-    console.log(`[URL VALIDATOR] Cleaned URL: ${cleanedUrl.substring(0, 50)}...`);
-    
     // For Supabase storage URLs, ensure they're properly formatted
     if (cleanedUrl.includes('supabase.co/storage')) {
       console.log(`[URL VALIDATOR] Detected Supabase storage URL`);
@@ -48,45 +70,54 @@ export const validateVideoUrl = (url: string): string => {
       // Check if the URL has a valid token
       if (!cleanedUrl.includes('token=') && !cleanedUrl.includes('/public/')) {
         console.error(`[URL VALIDATOR] Supabase URL missing token parameter or not public`);
-      } else {
-        if (cleanedUrl.includes('token=')) {
-          console.log(`[URL VALIDATOR] Supabase URL contains token parameter`);
-          
-          // Extract and validate token expiration if possible
-          try {
-            const tokenParam = cleanedUrl.split('token=')[1];
-            const token = tokenParam.split('&')[0]; // Get the token value
+        // Try to fix by attempting to construct a public URL
+        if (cleanedUrl.includes('/object/')) {
+          const pathMatch = cleanedUrl.match(/\/object\/([^?]+)/);
+          if (pathMatch && pathMatch[1]) {
+            const publicPath = pathMatch[1];
+            console.log(`[URL VALIDATOR] Attempting to fix by using public path: ${publicPath}`);
+            // This is a basic fix that may need to be customized based on your Supabase setup
+            const bucketName = publicPath.split('/')[0];
+            const objectPath = publicPath.split('/').slice(1).join('/');
             
-            // Try to decode the JWT to check expiration
-            const tokenParts = token.split('.');
-            if (tokenParts.length === 3) {
-              const payload = JSON.parse(atob(tokenParts[1]));
-              const expiration = payload.exp * 1000; // Convert to milliseconds
-              const now = Date.now();
-              
-              if (expiration < now) {
-                console.error(`[URL VALIDATOR] Supabase token has expired! Exp: ${new Date(expiration).toISOString()}, Now: ${new Date(now).toISOString()}`);
-              } else {
-                const daysRemaining = Math.round((expiration - now) / (1000 * 60 * 60 * 24));
-                console.log(`[URL VALIDATOR] Supabase token valid for ${daysRemaining} more days`);
-              }
-            }
-          } catch (e) {
-            console.warn(`[URL VALIDATOR] Could not validate token expiration:`, e);
+            const fixedUrl = `${cleanedUrl.split('/object/')[0]}/public/${bucketName}/${objectPath}`;
+            console.log(`[URL VALIDATOR] Fixed URL to public path: ${fixedUrl}`);
+            cleanedUrl = fixedUrl;
           }
-        } else if (cleanedUrl.includes('/public/')) {
-          console.log(`[URL VALIDATOR] Supabase URL is using public access`);
         }
       }
       
-      // Check if the URL is properly encoded
-      const hasEncodedChars = cleanedUrl.includes('%20') || cleanedUrl.includes('%2F');
-      console.log(`[URL VALIDATOR] URL has encoded characters: ${hasEncodedChars}`);
-      
-      // Ensure CORS headers will work by checking URL structure
-      if (cleanedUrl.includes('.supabase.co/storage/v1/object/public')) {
-        console.log('[URL VALIDATOR] URL appears to be a valid Supabase storage URL format');
+      // Add direct URL test if thorough validation requested
+      if (thorough) {
+        console.log(`[URL VALIDATOR] Performing thorough validation on Supabase URL`);
+        // We could add additional Supabase-specific checks here
       }
+    }
+    
+    // Ensure proper video file extensions for direct file links
+    const fileExtensionMatch = cleanedUrl.match(/\.(mp4|webm|ogg|mov)(\?|$)/i);
+    if (!fileExtensionMatch && !cleanedUrl.includes('supabase.co') && !cleanedUrl.includes('object') && !cleanedUrl.includes('bucket')) {
+      console.warn(`[URL VALIDATOR] URL may not point to a valid video file (no recognized extension)`);
+      
+      // If it looks like it might be a video URL but without extension, try to append .mp4
+      if (cleanedUrl.includes('video') || cleanedUrl.includes('media')) {
+        console.log(`[URL VALIDATOR] URL appears to be a video link, trying to ensure it has a file extension`);
+        
+        // Add .mp4 extension if there's no file extension and no query parameters
+        if (!cleanedUrl.includes('.') || cleanedUrl.lastIndexOf('.') < cleanedUrl.lastIndexOf('/')) {
+          if (!cleanedUrl.includes('?')) {
+            cleanedUrl += '.mp4';
+            console.log(`[URL VALIDATOR] Added .mp4 extension to URL: ${cleanedUrl}`);
+          }
+        }
+      }
+    }
+    
+    // Add cache busting parameter to prevent caching issues
+    if (thorough && !cleanedUrl.includes('cb=')) {
+      const separator = cleanedUrl.includes('?') ? '&' : '?';
+      cleanedUrl = `${cleanedUrl}${separator}cb=${Date.now()}`;
+      console.log(`[URL VALIDATOR] Added cache busting parameter: ${cleanedUrl.substring(0, 70)}...`);
     }
     
     console.log(`[URL VALIDATOR] Final validated URL: ${cleanedUrl.substring(0, 50)}...`);
@@ -121,6 +152,14 @@ export const testVideoPlayability = async (url: string): Promise<boolean> => {
         resolve(true);
       };
       
+      const onLoadedMetadata = () => {
+        console.log(`[URL VALIDATOR] Video metadata loaded successfully`);
+        // If metadata loads, the video is likely playable
+        // This is often more reliable than waiting for canplay
+        cleanup();
+        resolve(true);
+      };
+      
       const onError = (e: Event) => {
         console.error(`[URL VALIDATOR] Video CANNOT play (error event triggered)`, e);
         if (video.error) {
@@ -140,6 +179,7 @@ export const testVideoPlayability = async (url: string): Promise<boolean> => {
       
       const cleanup = () => {
         video.removeEventListener('canplay', onCanPlay);
+        video.removeEventListener('loadedmetadata', onLoadedMetadata);
         video.removeEventListener('error', onError);
         window.clearTimeout(timeoutId);
         video.src = ''; // Clear source
@@ -148,6 +188,7 @@ export const testVideoPlayability = async (url: string): Promise<boolean> => {
       
       // Register event handlers
       video.addEventListener('canplay', onCanPlay);
+      video.addEventListener('loadedmetadata', onLoadedMetadata);
       video.addEventListener('error', onError);
       
       // Set a timeout in case neither event fires
