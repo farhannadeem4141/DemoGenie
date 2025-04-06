@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useState } from 'react';
 import Header from '@/components/Header';
 import CTA from '@/components/CTA';
@@ -9,6 +8,7 @@ import FAQ from '@/components/FAQ';
 import Footer from '@/components/Footer';
 import TranscriptListener from '@/components/TranscriptListener';
 import NativeSpeechRecorder from '@/components/NativeSpeechRecorder';
+import VideoDisplayManager from '@/components/VideoDisplayManager';
 import { useToast } from '@/hooks/use-toast';
 import { resetVideoLoadingState, clearStaleLocks } from '@/utils/videoLoadingManager';
 import VapiButtonManager from '@/utils/vapiButtonManager';
@@ -95,15 +95,12 @@ const Index = () => {
     window.activateRecording = activateRecording;
   }, []);
 
-  // Set up button state manager to handle recording state
   useEffect(() => {
-    // Skip if already initialized
     if (isInitializedRef.current) return;
     
     addDebugLog("Initializing button manager");
     buttonManagerRef.current = VapiButtonManager.getInstance();
     
-    // Handle button state changes
     buttonManagerRef.current.onStateChange((state) => {
       const shouldBeActive = buttonManagerRef.current?.shouldRecordingBeActive();
       addDebugLog(`Button state changed. Should recording be active: ${shouldBeActive}, Current state: ${JSON.stringify(state)}`);
@@ -117,13 +114,11 @@ const Index = () => {
       }
     });
     
-    // Start monitoring
     addDebugLog("Starting button state monitoring");
     buttonManagerRef.current.startMonitoring();
     
     isInitializedRef.current = true;
     
-    // Clean up on unmount
     return () => {
       addDebugLog("Stopping button state monitoring due to component unmount");
       if (buttonManagerRef.current) {
@@ -167,12 +162,10 @@ const Index = () => {
     addDebugLog(`Adding Vapi script to DOM: ${script.src}`);
     document.body.appendChild(script);
 
-    // Periodically clear stale locks for system health
-    addDebugLog("Setting up stale lock cleanup interval");
     const staleLockCleanupInterval = setInterval(() => {
       addDebugLog("Clearing stale locks");
       clearStaleLocks();
-    }, 60000); // Every minute
+    }, 60000);
 
     script.onload = function () {
       addDebugLog("✅ Vapi script loaded successfully");
@@ -375,6 +368,8 @@ const Index = () => {
         <StepGuide />
         <FAQ />
         <TranscriptListener isRecording={isRecordingActive} />
+        
+        <VideoDisplayManager />
       </main>
       <Footer />
       {isRecordingActive && (
@@ -383,6 +378,14 @@ const Index = () => {
         </div>
       )}
       <NativeSpeechRecorder />
+      
+      <div className="fixed bottom-4 left-4 text-xs bg-black/70 text-white p-2 rounded z-50 max-w-xs">
+        Session: {sessionId.current.substring(0, 8)}...
+        <br />
+        Recording: {isRecordingActive ? 'Active' : 'Inactive'}
+        <br />
+        Vapi Ready: {!!vapiInstanceRef.current ? 'Yes' : 'No'}
+      </div>
     </div>
   );
 };
