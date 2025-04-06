@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { searchAndPlay } from '@/services/video/searchAndPlay';
 import VideoPlayer from '@/components/VideoPlayer';
 import { useToast } from '@/hooks/use-toast';
+import { VideoSearchResult } from '@/services/video/types';
 
 interface TranscriptListenerProps {
   isRecording: boolean;
@@ -72,7 +73,7 @@ const TranscriptListener: React.FC<TranscriptListenerProps> = ({ isRecording }) 
       
       // Search for a video based on the transcript
       searchAndPlay(transcript)
-        .then(result => {
+        .then((result: VideoSearchResult | null) => {
           console.log("TranscriptListener: Search result:", result);
           
           if (result && result.videoUrl) {

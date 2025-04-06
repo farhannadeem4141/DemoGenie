@@ -2,6 +2,9 @@
 import { supabase } from '@/integrations/supabase/client';
 import { VideoSearchResult } from './types';
 
+/**
+ * Search for videos by keyword
+ */
 export async function searchVideosByKeyword(keyword: string): Promise<VideoSearchResult> {
   console.log("%c [DB QUERY] Searching for videos with keyword: " + keyword, "background: #ff9e00; color: black; padding: 2px; border-radius: 4px;");
   
@@ -177,3 +180,40 @@ export async function testQuickRepliesSearch() {
 if (typeof window !== 'undefined') {
   (window as any).testQuickRepliesSearch = testQuickRepliesSearch;
 }
+
+// Export the searchKeywords function that the other modules are looking for
+export const searchKeywords = async (transcript: string): Promise<VideoSearchResult | null> => {
+  try {
+    console.log("[KeywordSearch] Searching for videos with keyword:", transcript);
+    
+    // Clean and normalize the input
+    const keyword = transcript.trim().toLowerCase();
+    
+    if (!keyword || keyword.length < 2) {
+      console.log("[KeywordSearch] Skipping search - keyword too short:", keyword);
+      return null;
+    }
+    
+    // Search for videos by keyword
+    const result = await searchVideosByKeyword(keyword);
+    
+    if (!result.success || !result.data || result.data.length === 0) {
+      console.log("[KeywordSearch] No videos found for keyword:", keyword);
+      return null;
+    }
+    
+    // Get the first video from the results
+    const video = result.data[0];
+    
+    return {
+      success: true,
+      videoUrl: video.video_url,
+      videoName: video.video_name || "Video",
+      data: [video],
+      searchDetails: result.searchDetails
+    };
+  } catch (error) {
+    console.error("[KeywordSearch] Error searching for videos:", error);
+    return null;
+  }
+};

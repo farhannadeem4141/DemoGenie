@@ -2,6 +2,7 @@ import { searchAndPlay } from '@/services/video/searchAndPlay';
 import { validateVideoUrl } from '@/services/video/videoUrlValidator';
 import { searchTranscript } from '@/services/video/transcriptSearch';
 import { searchKeywords } from '@/services/video/keywordSearch';
+import { VideoSearchResult } from '@/services/video/types';
 
 // Utility to test video search functionality
 const testId = `tester-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;

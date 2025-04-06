@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { validateVideoUrl } from "./videoUrlValidator";
 import { validateSearchKeyword, isNewTranscript } from "@/utils/videoLoadingManager";
@@ -7,6 +6,20 @@ interface TranscriptSearchResult {
   videos: string[];
   success: boolean;
   error?: string;
+}
+
+interface VideoSearchResult {
+  success: boolean;
+  videoUrl?: string;
+  videoName?: string;
+  data?: any[];
+  errorReason?: string;
+  searchDetails?: {
+    keywordUsed: string;
+    matchType?: 'exact' | 'partial' | 'none' | 'fallback';
+    searchMethod?: string;
+  };
+  rawQuery?: string;
 }
 
 // Function to fetch videos based on stored text
@@ -307,4 +320,52 @@ export const testVideoUrls = async (): Promise<{url: string, accessible: boolean
 // New utility to get a hard-coded fallback video in case all else fails
 export const getFallbackVideo = (): string => {
   return "https://boncletesuahajikgrrz.supabase.co/storage/v1/object/public/videos//WhatsApp%20end-to-end%20encryption.mp4";
+};
+
+// Export the searchTranscript function that the other modules are looking for
+export const searchTranscript = async (transcript: string): Promise<VideoSearchResult | null> => {
+  try {
+    console.log("[TranscriptSearch] Searching for videos with transcript:", transcript);
+    
+    // Clean and normalize the input
+    if (!transcript || transcript.trim().length < 2) {
+      console.log("[TranscriptSearch] Skipping search - transcript too short");
+      return null;
+    }
+    
+    // Store transcript in localStorage for consistency
+    localStorage.setItem("transcript", transcript);
+    
+    // Fetch detailed video results
+    const result = await fetchVideosWithDetails();
+    
+    if (!result.success || result.videos.length === 0) {
+      console.log("[TranscriptSearch] No videos found for transcript:", transcript);
+      return null;
+    }
+    
+    // Get the first video URL from the results
+    const videoUrl = result.videos[0];
+    
+    // Validate the URL
+    if (!videoUrl) {
+      console.log("[TranscriptSearch] No valid video URL found");
+      return null;
+    }
+    
+    // Create search result with video URL
+    return {
+      success: true,
+      videoUrl: videoUrl,
+      videoName: "Transcript Match Video",
+      searchDetails: {
+        keywordUsed: transcript,
+        matchType: 'exact',
+        searchMethod: 'transcript search'
+      }
+    };
+  } catch (error) {
+    console.error("[TranscriptSearch] Error searching for videos:", error);
+    return null;
+  }
 };

@@ -2,6 +2,8 @@
 export interface VideoSearchResult {
   success: boolean;
   data?: any[] | null;
+  videoUrl?: string;
+  videoName?: string;
   errorReason?: string;
   searchDetails?: {
     keywordUsed: string;
