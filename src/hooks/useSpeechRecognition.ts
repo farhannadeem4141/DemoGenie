@@ -267,7 +267,7 @@ const useSpeechRecognition = (options: SpeechRecognitionOptions = {}): UseSpeech
       recognitionRef.current.onresult = (event: SpeechRecognitionEvent) => {
         let currentTranscript = '';
         let finalTranscript = '';
-        
+
         for (let i = event.resultIndex; i < event.results.length; i++) {
           const result = event.results[i];
           if (result.isFinal) {
@@ -277,7 +277,8 @@ const useSpeechRecognition = (options: SpeechRecognitionOptions = {}): UseSpeech
             currentTranscript += result[0].transcript;
           }
         }
-        
+
+        // not updating with old transcript, instead replacing for current speech search
         // Update transcript with both final and interim results
         setTranscript(prev => {
           // For final transcripts, append to previous with space
@@ -288,7 +289,7 @@ const useSpeechRecognition = (options: SpeechRecognitionOptions = {}): UseSpeech
             
             // Save final transcripts immediately
             if (newTranscript.trim() && finalTranscript.trim()) {
-              saveTranscriptToLocalStorage(newTranscript);
+              saveTranscriptToLocalStorage(finalTranscript);
             }
           }
           
@@ -297,7 +298,7 @@ const useSpeechRecognition = (options: SpeechRecognitionOptions = {}): UseSpeech
             newTranscript = prev ? `${prev} ${currentTranscript}` : currentTranscript;
           }
           
-          return newTranscript;
+          return finalTranscript;
         });
       };
       

@@ -3,7 +3,7 @@ import { validateVideoUrl } from "./videoUrlValidator";
 import { validateSearchKeyword, isNewTranscript } from "@/utils/videoLoadingManager";
 
 interface TranscriptSearchResult {
-  videos: string[];
+  videos: { name: string, url: string }[];
   success: boolean;
   error?: string;
 }
@@ -231,9 +231,9 @@ export const fetchVideosWithDetails = async (): Promise<TranscriptSearchResult> 
         console.log("[TRANSCRIPT-SEARCH] Found fallback video");
         
         // Extract and validate video URLs
-        const videoUrls = fallbackResult.data
-          .map(video => validateVideoUrl(video.video_url))
-          .filter(url => !!url);
+        const videoUrls = data
+          .map(video => { return { url: validateVideoUrl(video.video_url), name: video.video_name} })
+          .filter(video => !!video.url); // Filter out invalid URLs
           
         if (videoUrls.length > 0) {
           return { videos: videoUrls, success: true };
@@ -245,8 +245,8 @@ export const fetchVideosWithDetails = async (): Promise<TranscriptSearchResult> 
 
     // Extract and validate video URLs
     const videoUrls = data
-      .map(video => validateVideoUrl(video.video_url))
-      .filter(url => !!url); // Filter out invalid URLs
+      .map(video => { return { url: validateVideoUrl(video.video_url), name: video.video_name} })
+      .filter(video => !!video.url); // Filter out invalid URLs
     
     console.log("[TRANSCRIPT-SEARCH] Fetched and validated Video URLs:", videoUrls);
     
@@ -346,9 +346,11 @@ export const searchTranscript = async (transcript: string): Promise<VideoSearchR
     
     // Get the first video URL from the results
     const videoUrl = result.videos[0];
+
+    console.log('videoUrl2', videoUrl)
     
     // Validate the URL
-    if (!videoUrl) {
+    if (!videoUrl?.url) {
       console.log("[TranscriptSearch] No valid video URL found");
       return null;
     }
@@ -356,8 +358,8 @@ export const searchTranscript = async (transcript: string): Promise<VideoSearchR
     // Create search result with video URL
     return {
       success: true,
-      videoUrl: videoUrl,
-      videoName: "Transcript Match Video",
+      videoUrl: videoUrl.url,
+      videoName: videoUrl.name,
       searchDetails: {
         keywordUsed: transcript,
         matchType: 'exact',
