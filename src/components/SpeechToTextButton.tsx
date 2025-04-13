@@ -4,6 +4,7 @@ import { ArrowRight, Mic, MicOff } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import useSpeechRecognition from '@/hooks/useSpeechRecognition';
 import { Button } from './ui/button';
+import { useVapi } from '@/hooks/useVapi';
 
 const SpeechToTextButton = () => {
   const [isRecording, setIsRecording] = useState(false);
@@ -27,6 +28,9 @@ const SpeechToTextButton = () => {
     interimResults: true,
   });
 
+  const { toggleCall, messages, callStatus, activeTranscript, audioLevel } =
+    useVapi();
+
   const toggleRecording = () => {
     // Debounce rapid clicks
     const now = Date.now();
@@ -37,6 +41,7 @@ const SpeechToTextButton = () => {
     buttonClickTimeRef.current = now;
     
     console.log("[DEBUG] Try Demo button clicked, initiating recording");
+    toggleCall()
     if (isRecording) {
       stopRecording();
     } else {
@@ -237,17 +242,105 @@ const SpeechToTextButton = () => {
     }
   }, [error, toast]);
 
+  const transcriptDebounceTimer = useRef<NodeJS.Timeout | null>(null);
+  const lastTranscriptRef = useRef('');
+
+  // Clean transcript by removing duplicate words
+  const cleanTranscript = (text: string): string => {
+    if (!text) return '';
+    
+    // Convert to lowercase and trim
+    let cleaned = text.toLowerCase().trim();
+    
+    // Split by spaces
+    const words = cleaned.split(/\s+/);
+    
+    // Remove consecutive duplicate words
+    const deduplicatedWords: string[] = [];
+    for (let i = 0; i < words.length; i++) {
+      // Only add if it's different from the previous word
+      if (i === 0 || words[i] !== words[i - 1]) {
+        deduplicatedWords.push(words[i]);
+      }
+    }
+    
+    return deduplicatedWords.join(' ');
+  };
+
+  // Save transcript when it changes with debounce to avoid multiple saves
+  React.useEffect(() => {
+    if (transcript && transcript.trim() && transcript !== lastTranscriptRef.current) {
+      console.log("[NativeSpeech] New transcript detected:", transcript);
+      
+      // Clear previous timer if it exists
+      if (transcriptDebounceTimer.current) {
+        clearTimeout(transcriptDebounceTimer.current);
+      }
+      
+      // Set a new timer for debouncing
+      transcriptDebounceTimer.current = setTimeout(() => {
+        const cleanedTranscript = cleanTranscript(transcript);
+        console.log("[NativeSpeech] Saving cleaned transcript:", cleanedTranscript);
+        
+        // Extract keywords 
+        const keywords = extractKeywords(cleanedTranscript);
+        console.log("[NativeSpeech] Extracted keywords:", keywords);
+        
+        // Save to localStorage directly here for redundancy
+        try {
+          // const keywords = extractKeywords(transcript);
+          console.log(`[DEBUG] Extracted keywords: ${JSON.stringify(keywords)}`);
+          
+          // Save transcript for video search
+          localStorage.setItem('transcript', transcript);
+          
+          // Save to local storage
+          const audioEntry = {
+            text: transcript,
+            timestamp: Date.now(),
+            keywords: keywords,
+            source: 'speechToText'
+          };
+          
+          // Get existing entries or create new array
+          const existingEntries = JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY) || '[]');
+          
+          // Add new entry at the beginning
+          localStorage.setItem(
+            LOCAL_STORAGE_KEY,
+            JSON.stringify([audioEntry, ...existingEntries].slice(0, 50))
+          );
+          
+          console.log("[DEBUG] Transcript saved to localStorage:", transcript);
+          
+          // Trigger video search with the transcript
+          window.dispatchEvent(new CustomEvent('voice_input', {
+            detail: {
+              type: 'voice_input',
+              text: transcript,
+              source: 'speechToText'
+            }
+          }));
+        } catch (e) {
+          console.error('[NativeSpeech] Error saving transcript to localStorage:', e);
+        }
+      }, 800); // Debounce for 800ms to ensure we get the complete transcript
+    }
+  }, [transcript]);
+
   return (
     <div className="inline-block">
       <Button
         onClick={toggleRecording}
         variant={isRecording ? "destructive" : "default"}
         size="lg"
+        disabled={callStatus === 'loading'}
         className={`flex items-center justify-center gap-2 ${
           isRecording ? 'bg-red-500 hover:bg-red-600' : 'bg-whatsapp hover:bg-whatsapp-dark text-white'
         }`}
       >
-        {isRecording ? (
+        {callStatus === 'loading' ? 'Connecting...' :
+        isRecording ? (
           <>
             <MicOff className="h-5 w-5" /> Stop Demo
           </>

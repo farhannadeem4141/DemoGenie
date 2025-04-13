@@ -19,55 +19,55 @@ const VideoPlayerVisibilityWrapper: React.FC<VideoPlayerVisibilityWrapperProps> 
   const containerRef = useRef<HTMLDivElement>(null);
   const instanceId = useRef(`player-wrapper-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`);
 
-  useEffect(() => {
-    console.log(`[VideoPlayerWrapper:${instanceId.current}] Initializing with URL:`, videoUrl);
+  // useEffect(() => {
+  //   console.log(`[VideoPlayerWrapper:${instanceId.current}] Initializing with URL:`, videoUrl);
     
-    // Use IntersectionObserver to check if the player is visible
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const isIntersecting = entries[0].isIntersecting;
-        const isVisible = isIntersecting && entries[0].boundingClientRect.height > 0;
-        console.log(`[VideoPlayerWrapper:${instanceId.current}] Visibility changed:`, isVisible);
-        setIsVisible(isVisible);
-      },
-      { threshold: 0.1 }
-    );
+  //   // Use IntersectionObserver to check if the player is visible
+  //   const observer = new IntersectionObserver(
+  //     (entries) => {
+  //       const isIntersecting = entries[0].isIntersecting;
+  //       const isVisible = isIntersecting && entries[0].boundingClientRect.height > 0;
+  //       console.log(`[VideoPlayerWrapper:${instanceId.current}] Visibility changed:`, isVisible);
+  //       setIsVisible(isVisible);
+  //     },
+  //     { threshold: 0.1 }
+  //   );
     
-    if (containerRef.current) {
-      observer.observe(containerRef.current);
-      console.log(`[VideoPlayerWrapper:${instanceId.current}] Started observing visibility`);
-    }
+  //   if (containerRef.current) {
+  //     observer.observe(containerRef.current);
+  //     console.log(`[VideoPlayerWrapper:${instanceId.current}] Started observing visibility`);
+  //   }
     
-    // Force display check after a timeout to catch any delayed rendering issues
-    setTimeout(() => {
-      if (containerRef.current) {
-        const isDisplayed = window.getComputedStyle(containerRef.current).display !== 'none';
-        const isVisible = isDisplayed && containerRef.current.getBoundingClientRect().height > 0;
-        console.log(`[VideoPlayerWrapper:${instanceId.current}] Visibility check after 500ms:`, isVisible);
+  //   // Force display check after a timeout to catch any delayed rendering issues
+  //   setTimeout(() => {
+  //     if (containerRef.current) {
+  //       const isDisplayed = window.getComputedStyle(containerRef.current).display !== 'none';
+  //       const isVisible = isDisplayed && containerRef.current.getBoundingClientRect().height > 0;
+  //       console.log(`[VideoPlayerWrapper:${instanceId.current}] Visibility check after 500ms:`, isVisible);
         
-        if (!isVisible) {
-          console.warn(`[VideoPlayerWrapper:${instanceId.current}] Player not visible after timeout!`);
-          console.log(`[VideoPlayerWrapper:${instanceId.current}] Container style:`, 
-            containerRef.current ? window.getComputedStyle(containerRef.current) : 'No container');
+  //       if (!isVisible) {
+  //         console.warn(`[VideoPlayerWrapper:${instanceId.current}] Player not visible after timeout!`);
+  //         console.log(`[VideoPlayerWrapper:${instanceId.current}] Container style:`, 
+  //           containerRef.current ? window.getComputedStyle(containerRef.current) : 'No container');
           
-          // Force visibility
-          if (containerRef.current) {
-            containerRef.current.style.display = 'block';
-            containerRef.current.style.visibility = 'visible';
-            containerRef.current.style.opacity = '1';
-            console.log(`[VideoPlayerWrapper:${instanceId.current}] Forced visibility styles`);
-          }
-        }
-      }
-    }, 500);
+  //         // Force visibility
+  //         if (containerRef.current) {
+  //           containerRef.current.style.display = 'block';
+  //           containerRef.current.style.visibility = 'visible';
+  //           containerRef.current.style.opacity = '1';
+  //           console.log(`[VideoPlayerWrapper:${instanceId.current}] Forced visibility styles`);
+  //         }
+  //       }
+  //     }
+  //   }, 500);
     
-    return () => {
-      if (containerRef.current) {
-        observer.unobserve(containerRef.current);
-        console.log(`[VideoPlayerWrapper:${instanceId.current}] Stopped observing visibility`);
-      }
-    };
-  }, [videoUrl]);
+  //   return () => {
+  //     if (containerRef.current) {
+  //       observer.unobserve(containerRef.current);
+  //       console.log(`[VideoPlayerWrapper:${instanceId.current}] Stopped observing visibility`);
+  //     }
+  //   };
+  // }, [videoUrl]);
 
   return (
     <div 

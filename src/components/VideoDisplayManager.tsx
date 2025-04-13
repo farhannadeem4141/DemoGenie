@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import VideoPlayerVisibilityWrapper from './VideoPlayerVisibilityWrapper';
 import { useToast } from '@/hooks/use-toast';
 
@@ -10,13 +10,11 @@ interface VideoDisplayManagerProps {
 const VideoDisplayManager: React.FC<VideoDisplayManagerProps> = ({ className }) => {
   const [activeVideo, setActiveVideo] = useState<{ url: string; name?: string } | null>(null);
   const { toast } = useToast();
-  
+
   useEffect(() => {
     // Listen for video play requests
     const handleVideoRequest = (event: CustomEvent) => {
-      const { videoUrl, videoName } = event.detail;
-      console.log('[VideoDisplayManager] Received video request event:', event.detail);
-      
+      const { videoUrl, videoName } = event.detail;      
       if (videoUrl) {
         setActiveVideo({ url: videoUrl, name: videoName });
         console.log('[VideoDisplayManager] Set active video:', videoUrl);
@@ -37,7 +35,7 @@ const VideoDisplayManager: React.FC<VideoDisplayManagerProps> = ({ className }) 
       console.log('[VideoDisplayManager] Dispatching test video event');
       window.dispatchEvent(new CustomEvent('video_play_request', {
         detail: {
-          videoUrl: "https://zludhbuizuzusixaqjww.supabase.co/storage/v1/object/public/videos/welcome.mp4",
+          videoUrl: "https://zludhbuizuzusixaqjww.supabase.co/storage/v1/object/sign/demogenie/about%20accepting%20payments%20on%20the%20whatsapp%20business%20app.mp4?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1cmwiOiJkZW1vZ2VuaWUvYWJvdXQgYWNjZXB0aW5nIHBheW1lbnRzIG9uIHRoZSB3aGF0c2FwcCBidXNpbmVzcyBhcHAubXA0IiwiaWF0IjoxNzQzNzk5MzY2LCJleHAiOjE3NzUzMzUzNjZ9.thsNoN3SliQLOGNRphEMkn4FZUu8FQyxxUFVGEle7X8&cb=1744147394388",
           videoName: "Debug Test Video"
         }
       }));
@@ -47,7 +45,7 @@ const VideoDisplayManager: React.FC<VideoDisplayManagerProps> = ({ className }) 
       window.removeEventListener('video_play_request', handleVideoRequest as EventListener);
       clearTimeout(testTimer);
     };
-  }, [toast]);
+  }, []);
   
   const handleClose = () => {
     console.log('[VideoDisplayManager] Closing video');
